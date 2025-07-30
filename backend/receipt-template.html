@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @font-face {
+      font-family: 'THSarabunNew';
+      src: url('file:///absolute/path/to/fonts/THSarabunNew.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0; 
+      width: 210mm;
+      height: 297mm;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: 'THSarabunNew', sans-serif;
+      font-size: 14pt; /* ลดขนาดฟอนต์ */
+      line-height: 1.7; /* ลดระยะห่างบรรทัด */
+      width: 210mm;
+      height: 297mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      box-sizing: border-box;
+      padding: 15mm 10mm 15mm 10mm; /* ลดขอบ */
+    }
+
+    .section {
+      margin-bottom: 10px; /* ลดระยะห่างแต่ละ section */
+    }
+
+    .center {
+      text-align: center;
+    }
+
+
+    * {
+      page-break-before: avoid;
+      page-break-after: avoid;
+      page-break-inside: avoid;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="section" style="text-align: right;">
+    นิติบุคคลหมู่บ้านจัดสรร กาญจน์กนกวิลล์ 12<br>
+    หมู่ 6 ตำบลสันโป่ง อำเภอแม่ริม จังหวัดเชียงใหม่ 50180<br>
+    <div class="section" style="display: flex; justify-content: space-between;">
+      <span>ที่ KKN12 001 2568</span>
+      <span>วันที่ <strong>{{date}}</strong></span>
+    </div>
+  </div>
+
+  <div class="section">
+    <strong>เรื่อง</strong> การขอแบ่งชำระค่าบำรุงกลาง บ้านเลขที่ <strong>{{houseNumber}}</strong>
+  </div>
+  <div class="section">
+    เรียน คณะกรรมการนิติบุคคลหมู่บ้านจัดสรรกาญจน์กนกวิลล์ 12 <br>
+    ข้าพเจ้า <strong>{{fullName}}</strong> &ensp;&ensp;&nbsp;เจ้าของบ้านเลขที่&nbsp;<strong>{{houseNumber}}</strong><br>
+    เบอร์โทรศัพท์ <strong>{{phone}}</strong> &ensp;เพื่อผู้ที่สามารถติดต่อได้&nbsp;<strong>{{contactAddress}}</strong>
+  </div>
+
+  <div class="section">
+    &emsp;&emsp;ขอทำบันทึกนี้แจ้งให้ทราบว่า คณะกรรมการนิคมบุคคลหมู่บ้านจัดสรรกาญจน์กนกวิลล์ 12 ดังกล่าวโดยมีข้อความแจ้งไปยัง ข้าพเจ้าเพื่อเรียกเก็บการชำระค่าบำรุงกลางประจำปี 2568 
+    โดยมียอดค่าบำรุงกลางที่ต้องชำระทั้งหมด <strong>{{totalAmount}}</strong> บาท<br>
+    โดยจะขอชำระจำนวน <strong>{{Amount}}</strong> งวด งวดละ <strong>{{installment}}</strong> บาท เริ่มชำระงวดแรกภายในวันที่ <strong>{{firstPaymentDate}}</strong>
+  </div>
+
+  <div class="section">
+    &emsp;&emsp;โดยชำระตามกำหนดภายในวันที่ 31 ธันวาคม 2568 ได้เท่านั้น<br>
+    หากชำระล่าช้าทางนิติบุคคลจะมีค่าปรับ โดยการโอนเงินเข้าบัญชี<br>
+    ออมทรัพย์ ธนาคารไทยพาณิชย์ (SCB) สาขาเดอะพาวิลเลียน เชียงใหม่<br>
+    ชื่อบัญชี นิติบุคคลหมู่บ้านจัดสรรกาญจน์กนกวิลล์ 12<br>
+    เลขที่บัญชี <strong>437-180582-8</strong>
+  </div>
+
+  <div class="section">
+    &emsp;ซึ่งข้าพเจ้า <strong>{{fullName}}</strong> เจ้าของบ้านเลขที่ <strong>{{houseNumber}}</strong><br>
+    รับทราบและตกลงปฏิบัติตามข้อกำหนดการชำระค่าบำรุงกลางตามรายละเอียดข้างต้นทุกประการ
+  </div>
+
+  <div class="section" style="text-align: right;">
+    <br><br>
+    ขอแสดงความนับถือ&emsp;&emsp;&emsp;&emsp;<br><br><br>
+    ลงชื่อ ..........................................................<br>
+    (<strong>{{fullName}}</strong>)&emsp;&emsp;&emsp;&emsp;<br>
+    วันที่ <strong>{{signDate}}</strong>&emsp;&emsp;&ensp;
+  </div>
+
+</body>
+</html>

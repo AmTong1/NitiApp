@@ -1,0 +1,22 @@
+{
+  "name": "s",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "start":"node server.js",
+  "main": "server.js",
+  
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "fs-extra": "^11.3.0",
+    "handlebars": "^4.7.8",
+    "multer": "^2.0.2",
+    "puppeteer": "^24.15.0"
+  }
+}
