@@ -1,43 +1,35 @@
-const express = require('express');
-const fs = require('fs-extra');
-const path = require('path');
-const puppeteer = require('puppeteer');
-const Handlebars = require('handlebars');
-const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 
-const app = express();
-app.use(express.json());
-app.use(cors());
-app.use('/pdfs', express.static(path.join(__dirname, 'pdfs')));
+// Load env/config early
+require('dotenv').config();
+const { HOST, PORT } = require('./src/config/env');
+const { buildApp } = require('./src/app');
+const { setupSocket } = require('./src/socket');
+const { scheduleQrCleanup } = require('./src/utils/qr');
+const { initDatabase } = require('./src/db/initDb');
 
-app.post('/generate-pdf', async (req, res) => {
-  const data = req.body;
+// Initialize database and start server
+(async () => {
+  // Auto-create database and tables if they don't exist
+  await initDatabase();
 
-  // สร้างโฟลเดอร์ pdfs ถ้ายังไม่มี
-  await fs.ensureDir(path.join(__dirname, 'pdfs'));
-
-  const templateHtml = await fs.readFile('./receipt-template.html', 'utf8');
-  const template = Handlebars.compile(templateHtml);
-  const html = template(data);
-
-  const browser = await puppeteer.launch({ headless: 'new' });
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'networkidle0' });
-
-  const filename = `receipt-${Date.now()}.pdf`;
-  const filePath = path.join(__dirname, 'pdfs', filename);
-  await page.pdf({
-    path: filePath,
-    format: 'A4',
-    printBackground: true,
-    preferCSSPageSize: true,
-    margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' }
+  // Create app + server + socket.io
+  const io = new Server({
+    cors: { origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'] }
   });
-  await browser.close();
+  const app = buildApp(io);
+  const server = http.createServer(app);
+  io.attach(server);
 
-  res.json({ url: `http://192.168.2.12:3000/pdfs/${filename}` });
-});
+  // Socket handlers
+  setupSocket(io);
 
-app.listen(3000, () => {
-  console.log('PDF server running on port 3000');
-});
+  // Background jobs
+  scheduleQrCleanup();
+
+  // Start server
+  server.listen(PORT, () => {
+    console.log(`Backend running at http://${HOST}:${PORT}`);
+  });
+})();
