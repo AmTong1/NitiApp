@@ -3,6 +3,42 @@ const { authGuard, adminOnly } = require('../middleware/auth');
 const { pool } = require('../db/pool');
 const { hasDb, columnExists } = require('../utils/db');
 
+// ============ Resident Logs ============
+async function ensureResidentLogsTable() {
+  if (!(await hasDb())) return false;
+  await pool.query(`CREATE TABLE IF NOT EXISTS resident_logs (
+    id BIGSERIAL PRIMARY KEY,
+    action VARCHAR(32) NOT NULL,
+    resident_id BIGINT NULL,
+    house_number VARCHAR(32) NULL,
+    resident_name VARCHAR(255) NULL,
+    changes JSONB NULL,
+    performed_by BIGINT NULL,
+    performed_by_name VARCHAR(255) NULL,
+    performed_by_role VARCHAR(32) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  return true;
+}
+
+async function insertResidentLog(action, { residentId, houseNumber, residentName, changes, user }) {
+  try {
+    await ensureResidentLogsTable();
+    const performedBy = user?.id || null;
+    const performedByName = user?.full_name || user?.username || null;
+    const performedByRole = user?.role || null;
+    await pool.query(
+      `INSERT INTO resident_logs (action, resident_id, house_number, resident_name, changes, performed_by, performed_by_name, performed_by_role)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [action, residentId || null, houseNumber || null, residentName || null,
+       changes ? JSON.stringify(changes) : null, performedBy, performedByName, performedByRole]
+    );
+  } catch (e) {
+    console.warn('insertResidentLog error:', e.message);
+  }
+}
+// ============ End Resident Logs ============
+
 let mockResidents = (global.mockResidents ?? [
   { id: 1, house_number: '101', title: 'นาย', first_name: 'สมชาย', last_name: 'ใจดี', phone: '0812345678', household_count: 3, car_count: 1 },
   { id: 2, house_number: '102', title: 'นางสาว', first_name: 'สมหญิง', last_name: 'สุขสันต์', phone: '0899998888', household_count: 2, car_count: 0 },
@@ -145,7 +181,19 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
 
     if (!Number.isFinite(area)) return;
 
-    const rate = 10;
+  // Get rate from settings or default 10
+  let rate = 10;
+  try {
+    const resOrRows = await db.query("SELECT value FROM system_settings WHERE key = 'rate_per_sqm'");
+    // Handle both pool wrapper ([rows]) and pg client ({rows})
+    const rows = Array.isArray(resOrRows) ? resOrRows[0] : (resOrRows.rows || []);
+    if (rows && rows.length > 0) {
+      const val = rows[0].value;
+      if (val && !isNaN(val)) rate = Number(val);
+    }
+  } catch (e) { console.warn('get rate error', e.message); }
+
+
     const perMonth = area * rate;
     const total = perMonth * monthsNum;
 
@@ -196,7 +244,17 @@ async function upsertPayment(db, { houseNumber, months, areaProvided }) {
     if (h?.[0]?.area_sq_m != null) area = Number(h[0].area_sq_m);
   }
   if (!Number.isFinite(area)) return;
-  const rate = 10;
+  // Get rate from settings or default 10
+  let rate = 10;
+  try {
+    const resOrRows = await db.query("SELECT value FROM system_settings WHERE key = 'rate_per_sqm'");
+    const rows = Array.isArray(resOrRows) ? resOrRows[0] : (resOrRows.rows || []);
+    if (rows && rows.length > 0) {
+      const val = rows[0].value;
+      if (val && !isNaN(val)) rate = Number(val);
+    }
+  } catch (e) { console.warn('get rate error', e.message); }
+
   const per = area * rate;
   const total = per * m;
 
@@ -377,7 +435,7 @@ function registerResidentRoutes(app) {
         }
         const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
         const [rows] = await pool.query(
-          `SELECT r.id, r.house_number, r.title, r.first_name, r.last_name, r.phone,
+          `SELECT DISTINCT ON (r.house_number) r.id, r.house_number, r.title, r.first_name, r.last_name, r.phone,
                   r.household_count, r.car_count, r.pay_months,
                   h.area_sq_m,
                   ${COVERAGE_COLUMNS}
@@ -385,7 +443,7 @@ function registerResidentRoutes(app) {
              LEFT JOIN houses h ON h.house_number = r.house_number
              LEFT JOIN payments pay ON pay.house_number = r.house_number
              ${whereSql}
-             ORDER BY r.house_number ASC`,
+             ORDER BY r.house_number ASC, pay.id DESC`,
           params
         );
         return res.json({ ok: true, data: rows });
@@ -440,6 +498,17 @@ function registerResidentRoutes(app) {
            WHERE r.house_number = $1 ORDER BY r.id DESC LIMIT 1`,
           [house_number]
         );
+
+        // Log create
+        const created = rows[0];
+        await insertResidentLog('create', {
+          residentId: created?.id,
+          houseNumber: house_number,
+          residentName: [title, first_name, last_name].filter(Boolean).join(' '),
+          changes: { house_number, title, first_name, last_name, phone, household_count, car_count, area_sq_m, pay_months },
+          user: req.user,
+        });
+
         return res.status(201).json({ ok: true, data: rows[0] });
       } catch (e) {
         if (isDup(e)) {
@@ -552,6 +621,17 @@ function registerResidentRoutes(app) {
           WHERE r.house_number = $1 ORDER BY r.id DESC LIMIT 1`,
         [house_number]
       );
+
+      // Log register (create with account)
+      const created = rows[0];
+      await insertResidentLog('create', {
+        residentId: created?.id,
+        houseNumber: house_number,
+        residentName: [title, first_name, last_name].filter(Boolean).join(' '),
+        changes: { house_number, title, first_name, last_name, phone, household_count, car_count, area_sq_m, pay_months, username },
+        user: req.user,
+      });
+
       return res.status(201).json({ ok: true, data: rows[0] });
     } catch (e) {
       try { await client.query('ROLLBACK'); } catch {}
@@ -585,11 +665,19 @@ function registerResidentRoutes(app) {
 
       // ดึงข้อมูลเดิม
       const [oldRows] = await pool.query(
-        'SELECT id, house_number, pay_months, first_name FROM residents WHERE id = $1 LIMIT 1',
+        'SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = $1 LIMIT 1',
         [id]
       );
       const old = oldRows[0];
       if (!old) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+
+      // ดึง area_sq_m เดิมจาก houses
+      let oldAreaSqM = null;
+      try {
+        const [hRows] = await pool.query('SELECT area_sq_m FROM houses WHERE house_number = $1 LIMIT 1', [old.house_number]);
+        if (hRows[0]?.area_sq_m != null) oldAreaSqM = Number(hRows[0].area_sq_m);
+      } catch {}
+      old.area_sq_m = oldAreaSqM;
 
       const phoneDigits = phone === undefined ? undefined : (String(phone || '').replace(/\D/g, '') || null);
       const fields = [];
@@ -650,6 +738,34 @@ function registerResidentRoutes(app) {
           WHERE r.id = $1 LIMIT 1`,
         [id]
       );
+
+      // Build change diff and log
+      const updated = rows2[0];
+      const changes = {};
+      const fieldMap = { house_number, title, first_name, last_name, phone, household_count, car_count, pay_months, area_sq_m };
+      for (const [key, newVal] of Object.entries(fieldMap)) {
+        if (newVal !== undefined) {
+          const oldVal = old[key] ?? null;
+          const nv = newVal ?? null;
+          if (String(oldVal) !== String(nv)) {
+            changes[key] = { old: oldVal, new: nv };
+          }
+        }
+      }
+
+      // Determine action: if only pay_months changed, mark as 'update_months'
+      const changedKeys = Object.keys(changes);
+      const action = changedKeys.length === 1 && changedKeys[0] === 'pay_months' ? 'update_months' : 'update';
+      if (changedKeys.length > 0) {
+        await insertResidentLog(action, {
+          residentId: id,
+          houseNumber: updated?.house_number || old.house_number,
+          residentName: [updated?.title, updated?.first_name, updated?.last_name].filter(Boolean).join(' '),
+          changes,
+          user: req.user,
+        });
+      }
+
       return res.json({ ok: true, data: rows2[0] || null });
     } catch (e) {
       if (isDup(e)) {
@@ -668,8 +784,9 @@ function registerResidentRoutes(app) {
     if (await ensureResidentsTable()) {
       try {
         await ensureHousesTable();
-        const [rows] = await pool.query('SELECT house_number FROM residents WHERE id = $1 LIMIT 1', [id]);
-        const hn = rows[0]?.house_number ? String(rows[0].house_number) : null;
+        const [rows] = await pool.query('SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = $1 LIMIT 1', [id]);
+        const deleted = rows[0];
+        const hn = deleted?.house_number ? String(deleted.house_number) : null;
 
         const client = await pool.getClient();
         try {
@@ -686,6 +803,27 @@ function registerResidentRoutes(app) {
         } finally {
           client.release();
         }
+
+        // Log delete
+        if (deleted) {
+          await insertResidentLog('delete', {
+            residentId: id,
+            houseNumber: hn,
+            residentName: [deleted.title, deleted.first_name, deleted.last_name].filter(Boolean).join(' '),
+            changes: {
+              house_number: deleted.house_number,
+              title: deleted.title,
+              first_name: deleted.first_name,
+              last_name: deleted.last_name,
+              phone: deleted.phone,
+              household_count: deleted.household_count,
+              car_count: deleted.car_count,
+              pay_months: deleted.pay_months,
+            },
+            user: req.user,
+          });
+        }
+
         return res.json({ ok: true, house_deleted: !!hn });
       } catch (e) {
         console.error('DELETE /residents/:id DB error:', e);
@@ -727,6 +865,45 @@ function registerResidentRoutes(app) {
       return res.json({ ok: true, exists, house_number: hn });
     } catch (e) {
       console.error('GET /houses/validate error:', e);
+      return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+    }
+  });
+
+  // ============ Resident Logs API ============
+  app.get('/resident-logs', authGuard, adminOnly, async (req, res) => {
+    try {
+      const ok = await ensureResidentLogsTable();
+      if (!ok) return res.json({ ok: true, data: [], hasMore: false });
+
+      const q = String(req.query.q || '').trim();
+      const action = String(req.query.action || '').trim();
+      const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+      const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+      const where = [];
+      const params = [];
+      let idx = 1;
+
+      if (q) {
+        where.push(`(rl.house_number LIKE $${idx} OR rl.resident_name LIKE $${idx + 1} OR rl.performed_by_name LIKE $${idx + 2})`);
+        params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+        idx += 3;
+      }
+      if (action) {
+        where.push(`rl.action = $${idx}`);
+        params.push(action);
+        idx++;
+      }
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+      const [rows] = await pool.query(
+        `SELECT rl.* FROM resident_logs rl ${whereSql} ORDER BY rl.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...params, limit + 1, offset]
+      );
+      const hasMore = rows.length > limit;
+      if (hasMore) rows.pop();
+      return res.json({ ok: true, data: rows, hasMore });
+    } catch (e) {
+      console.error('GET /resident-logs error:', e);
       return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
     }
   });

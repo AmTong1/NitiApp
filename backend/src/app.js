@@ -27,6 +27,7 @@ function buildApp(io) {
   app.use('/pdfs', express.static(PDF_DIR));
 
   // routes
+  registerSettingsRoutes(app);
   registerAuthRoutes(app);
   registerSlipOkRoutes(app);
   registerPromptPayRoutes(app);
@@ -38,7 +39,6 @@ function buildApp(io) {
   registerChatRoutes(app, io);
   registerPaymentRoutes(app);
   registerResidentRoutes(app);
-  registerSettingsRoutes(app);
 
   return app;
 }

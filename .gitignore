@@ -1,0 +1,27 @@
+# Dependencies
+**/node_modules/
+
+# Environment and secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime uploads and generated assets
+backend/uploads/
+backend/qrs/
+
+# Archives and local backups
+*.zip
+*.rar
+*.7z
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/

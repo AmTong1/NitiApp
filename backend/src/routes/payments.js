@@ -4,6 +4,44 @@ const { pool } = require('../db/pool');
 const { hasDb } = require('../utils/db');
 const { authGuard, adminOnly } = require('../middleware/auth');
 
+// Helper: log month changes to resident_logs table
+async function logMonthChange({ houseNumber, oldMonths, newMonths, user }) {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS resident_logs (
+      id BIGSERIAL PRIMARY KEY,
+      action VARCHAR(32) NOT NULL,
+      resident_id BIGINT NULL,
+      house_number VARCHAR(32) NULL,
+      resident_name VARCHAR(255) NULL,
+      changes JSONB NULL,
+      performed_by BIGINT NULL,
+      performed_by_name VARCHAR(255) NULL,
+      performed_by_role VARCHAR(32) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+    // Get resident name
+    let residentName = null;
+    const [rRows] = await pool.query(
+      "SELECT id, TRIM(CONCAT_WS(' ', NULLIF(title,''), NULLIF(first_name,''), NULLIF(last_name,''))) AS name FROM residents WHERE house_number = $1 LIMIT 1",
+      [houseNumber]
+    );
+    const r = rRows?.[0];
+    residentName = r?.name || null;
+
+    await pool.query(
+      `INSERT INTO resident_logs (action, resident_id, house_number, resident_name, changes, performed_by, performed_by_name, performed_by_role)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        'update_months', r?.id || null, houseNumber, residentName,
+        JSON.stringify({ pay_months: { old: oldMonths, new: newMonths } }),
+        user?.id || null, user?.full_name || user?.username || null, user?.role || null
+      ]
+    );
+  } catch (e) {
+    console.warn('logMonthChange error:', e.message);
+  }
+}
+
 async function tableExists(table) {
   const [rows] = await pool.query(
     `SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_catalog = current_database() AND table_name = $1`,
@@ -201,7 +239,23 @@ function registerPaymentRoutes(app) {
         }
         if (!Number.isFinite(area)) { await client.query('ROLLBACK'); client.release(); return res.status(400).json({ ok: false, error: 'NO_AREA' }); }
 
-        const rate = 10;
+        let rate = 10;
+        console.log('[Payment] app.getSetting exists:', !!app.getSetting);
+        if (app.getSetting) {
+          const r = await app.getSetting('rate_per_sqm');
+          console.log('[Payment] app.getSetting returned:', r);
+          if (r && !isNaN(r)) rate = Number(r);
+        } else {
+          console.log('[Payment] Fallback to manual query');
+          // Fallback if app.getSetting not ready (should not happen)
+          const setRows = await client.query("SELECT value FROM system_settings WHERE key = 'rate_per_sqm'");
+          if (setRows.rows.length > 0) {
+             console.log('[Payment] Manual query returned:', setRows.rows[0].value);
+             rate = Number(setRows.rows[0].value);
+          }
+        }
+        console.log('[Payment] Final rate used:', rate);
+
         const per = area * rate;
         const total = per * m;
 
@@ -361,6 +415,17 @@ function registerPaymentRoutes(app) {
          FROM payments WHERE id = $1`,
         [id]
       );
+
+      // Log month change if months changed
+      if (months !== undefined && Number(months) !== oldMonths) {
+        await logMonthChange({
+          houseNumber: old.house_number,
+          oldMonths,
+          newMonths: m,
+          user: req.user,
+        });
+      }
+
       return res.json({ ok: true, data: rows2[0] });
     } catch (e) {
       console.error('PUT /payments/:id error', e);

@@ -3,8 +3,63 @@ const { PROMPTPAY_ID, PROMPTPAY_DEFAULT_AMOUNT } = require('../config/env');
 const { qrCache, isExpired, createAndCacheQR, buildQrResponse } = require('../utils/qr');
 const { pool } = require('../db/pool');
 const { buildBatchInsert } = require('../utils/pgHelper');
+const { authGuard } = require('../middleware/auth');
+const multer = require('multer');
+const fs = require('fs-extra');
+const path = require('path');
 
-// อัปเดตสถานะ 'overdue' หากเลย period_end แล้วและยังไม่ชำระ
+// Configure Multer
+const uploadDir = path.join(__dirname, '../../uploads/proofs');
+fs.ensureDirSync(uploadDir);
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'proof-' + uniqueSuffix + ext);
+  }
+});
+const upload = multer({ storage: storage });
+
+async function ensureProofImageColumn() {
+  try {
+    // Check if column exists
+    const [rows] = await pool.query(
+      `SELECT column_name FROM information_schema.columns 
+       WHERE table_name = 'payment_installments' AND column_name = 'proof_image'`
+    );
+    if (rows.length === 0) {
+      await pool.query(`ALTER TABLE payment_installments ADD COLUMN proof_image VARCHAR(255) NULL`);
+      console.log('Added proof_image column to payment_installments');
+    }
+    
+    // Check for paid_by column
+    const [rows2] = await pool.query(
+      `SELECT column_name FROM information_schema.columns 
+       WHERE table_name = 'payment_installments' AND column_name = 'paid_by'`
+    );
+    if (rows2.length === 0) {
+      await pool.query(`ALTER TABLE payment_installments ADD COLUMN paid_by VARCHAR(100) NULL`);
+      console.log('Added paid_by column to payment_installments');
+    }
+
+    // Check for approved_by column
+    const [rows3] = await pool.query(
+      `SELECT column_name FROM information_schema.columns 
+       WHERE table_name = 'payment_installments' AND column_name = 'approved_by'`
+    );
+    if (rows3.length === 0) {
+      await pool.query(`ALTER TABLE payment_installments ADD COLUMN approved_by VARCHAR(100) NULL`);
+      console.log('Added approved_by column to payment_installments');
+    }
+
+  } catch (e) {
+    console.error('Ensure columns failed:', e.message);
+  }
+}
 async function refreshInstallmentStatuses() {
   try {
     const [result] = await pool.query(
@@ -97,6 +152,9 @@ async function generateInstallmentsForPayment(paymentId) {
 }
 
 function registerPromptPayRoutes(app) {
+  // Ensure new columns exist on startup
+  ensureProofImageColumn().catch(e => console.error('ensureProofImageColumn on boot:', e.message));
+
   app.get('/promptpay-qr', async (req, res) => {
     try {
       if (!PROMPTPAY_ID) return res.status(500).json({ message: 'ยังไม่ได้ตั้ง PROMPTPAY_ID ใน .env' });
@@ -230,38 +288,77 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  app.patch('/payment-installments/:id', async (req, res) => {
+  app.patch('/payment-installments/:id', authGuard, upload.single('file'), async (req, res) => {
     try {
+      await ensureProofImageColumn(); // Ensure column exists before update
+
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ ok: false, message: 'invalid id' });
 
-      const allowed = new Set(['paid', 'pending', 'overdue']);
+      const allowed = new Set(['paid', 'pending', 'overdue', 'waiting_approval']);
       const status = String(req.body?.status || '').toLowerCase();
-      if (!allowed.has(status)) return res.status(400).json({ ok: false, message: 'status must be paid|pending|overdue' });
+      if (!allowed.has(status)) return res.status(400).json({ ok: false, message: 'status must be paid|pending|overdue|waiting_approval' });
 
       const methodRaw = req.body?.paid_method ? String(req.body.paid_method).toLowerCase() : null;
       const methodAllowed = new Set(['cash', 'promptpay', 'bank_transfer']);
       const method = methodRaw && methodAllowed.has(methodRaw) ? methodRaw : null;
       const note = req.body?.paid_note ? String(req.body.paid_note) : null;
+      const paidBy = req.user?.username || 'System'; // Get username from token
+      
+      let proofPath = null;
+      if (req.file) {
+        // Save relative path
+        proofPath = 'uploads/proofs/' + req.file.filename;
+      }
 
       let sql, params;
       if (status === 'paid') {
+        // เมื่ออนุมัติ (paid): เก็บ approved_by = คนที่กดอนุมัติ, คง paid_by เดิม (ถ้ามี)
+        // ถ้า paid_by ยังว่างอยู่ (จ่ายเงินสดตรง ไม่ผ่าน waiting) ให้ใช้ paidBy
+        if (proofPath) {
+             sql = `
+            UPDATE payment_installments
+            SET status='paid', paid_at = NOW(), paid_method = COALESCE($1, paid_method),
+                paid_note = COALESCE($2, paid_note), proof_image = $3,
+                paid_by = COALESCE(paid_by, $4), approved_by = $4
+            WHERE id = $5
+          `;
+          params = [method, note, proofPath, paidBy, id];
+        } else {
+             sql = `
+            UPDATE payment_installments
+            SET status='paid', paid_at = NOW(), paid_method = COALESCE($1, paid_method),
+                paid_note = COALESCE($2, paid_note),
+                paid_by = COALESCE(paid_by, $3), approved_by = $3
+            WHERE id = $4
+          `;
+          params = [method, note, paidBy, id];
+        }
+      } else if (status === 'waiting_approval') {
+        // ผู้ใช้ส่งหลักฐาน: เก็บ paid_by = คนที่ส่ง
+        const updateParams = [method, note, paidBy, id];
+        let proofSql = '';
+        if (proofPath) {
+          proofSql = ', proof_image = $5';
+          updateParams.push(proofPath);
+        }
+        
         sql = `
           UPDATE payment_installments
-          SET status='paid', paid_at = NOW(), paid_method = $1, paid_note = $2
-          WHERE id = $3
+          SET status='waiting_approval', paid_method = $1, paid_note = $2, paid_by = $3 ${proofSql}
+          WHERE id = $4
         `;
-        params = [method, note, id];
+        params = updateParams;
       } else {
         sql = `
           UPDATE payment_installments
-          SET status = $1, paid_at = NULL, paid_method = NULL, paid_note = NULL
+          SET status = $1, paid_at = NULL, paid_method = NULL, paid_note = NULL, proof_image = NULL, paid_by = NULL, approved_by = NULL
           WHERE id = $2
         `;
         params = [status, id];
       }
       const [r] = await pool.query(sql, params);
-      return res.json({ ok: true, affected: r?.length || 0 });
+      return res.json({ ok: true, affected: r?.length || 0, proof: proofPath });
     } catch (err) {
       console.error(err);
       res.status(500).json({ ok: false, message: 'update status failed', error: err.message });
@@ -274,7 +371,7 @@ function registerPromptPayRoutes(app) {
       const id = Number(req.params.id);
       const [rows] = await pool.query(
         `SELECT id, payment_id, house_number, installment_no, months_span, due_date, amount, status,
-                paid_at, paid_method, paid_note, period_start, period_end
+                paid_at, paid_method, paid_note, period_start, period_end, proof_image, paid_by, approved_by
          FROM payment_installments
          WHERE payment_id = $1
          ORDER BY installment_no ASC`,
@@ -311,8 +408,51 @@ function registerPromptPayRoutes(app) {
     try {
       const search = String(req.query.search || '').trim();
       const limit = Math.max(1, Math.min(1000, Number(req.query.limit || 300)));
+      const month = req.query.month ? Number(req.query.month) : null; // 1-12
+      const year = req.query.year ? Number(req.query.year) : null;    // YYYY
 
-      // PostgreSQL: window function works the same
+      // เงื่อนไข Filter เพิ่มเติม
+      const conditions = [];
+      const params = [];
+      let paramIdx = 1;
+
+      if (search) {
+        conditions.push(`pi.house_number LIKE $${paramIdx++}`);
+        params.push(`%${search}%`);
+      }
+
+      // ถ้ามี month/year: กรองเฉพาะ installment ที่ครอบคลุมช่วงเวลานั้น
+      // period_start <= LastDayOfMonth AND period_end >= FirstDayOfMonth
+      if (month && year) {
+        // หาวันแรกและวันสุดท้ายของเดือนที่เลือก
+        // แต่ใน DB เก็บเป็น period_start, period_end (DATE)
+        // Logic: Installment ครอบคลุมเดือน M ปี Y ถ้า:
+        //  - period_start <= Y-M-[EndDay]
+        //  - period_end >= Y-M-01
+        
+        // สร้าง string วันที่ YYYY-MM-DD สำหรับ query
+        const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+        // หาวันสุดท้าย: ใช้ JS Date
+        const lastDateObj = new Date(year, month, 0); // month is 1-based, so Date(y, m, 0) gives last day of prev month? No, Date(y, m, 0) gives last day of month 'm' if m is 1-based?? 
+        // Wait, new Date(2026, 1, 1) is Feb 1st. new Date(2026, 2, 0) is Last day of Feb.
+        // req.query.month 1-12. 
+        // new Date(year, month, 0) -> gives last day of `month`. e.g. month=1 (Jan), new Date(2026, 1, 0) = Jan 31. Correct.
+        const lastDayVal = lastDateObj.getDate();
+        const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayVal).padStart(2, '0')}`;
+
+        conditions.push(`pi.period_start <= $${paramIdx++}::DATE`);
+        params.push(lastDay);
+        conditions.push(`pi.period_end >= $${paramIdx++}::DATE`);
+        params.push(firstDay);
+      }
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+      // PostgreSQL: window function logic
+      // ใช้ ROW_NUMBER() เพื่อเลือก "1 รายการ" ต่อ 1 บ้าน
+      // กรณีระบุเดือน/ปี: เราหวังผลให้ได้งวดที่ตรงกับเดือนนั้นที่สุด (ซึ่งตาม Logic ควรมีแค่งวดเดียวที่ cover)
+      // กรณีไม่ระบุ: เอาตัวล่าสุด (ตาม due_date/id)
+      
       let sql = `
         WITH ranked AS (
           SELECT
@@ -330,7 +470,7 @@ function registerPromptPayRoutes(app) {
               ORDER BY pi.due_date DESC, pi.installment_no DESC, pi.id DESC
             ) AS rn
           FROM payment_installments pi
-          ${search ? 'WHERE pi.house_number LIKE $1' : ''}
+          ${whereClause}
         )
         SELECT
           house_number,
@@ -343,10 +483,9 @@ function registerPromptPayRoutes(app) {
         FROM ranked
         WHERE rn = 1
         ORDER BY house_number ASC
-        LIMIT ${search ? '$2' : '$1'}
+        LIMIT $${paramIdx}
       `;
-      const params = [];
-      if (search) params.push(`%${search}%`);
+      // params already filled, just add limit
       params.push(limit);
 
       const [rows] = await pool.query(sql, params);
@@ -505,6 +644,63 @@ function registerPromptPayRoutes(app) {
   });
 
   // ...existing routes remain...
+  // GET /payment-installments/logs
+  app.get('/payment-installments/logs', authGuard, async (req, res) => {
+    try {
+      const search = String(req.query.search || '').trim();
+      const limit = Math.max(1, Math.min(100, Number(req.query.limit || 50)));
+      
+      const conditions = [];
+      const params = [];
+      let paramIdx = 1;
+
+      // Filter: Show only relevant logs (paid, waiting, or has proof)
+      // If you want ALL history including pending, remove this condition or make it optional.
+      // Usually "logs" implies something happened.
+      conditions.push(`(pi.status IN ('paid', 'waiting_approval') OR pi.proof_image IS NOT NULL OR pi.paid_at IS NOT NULL)`);
+
+      if (search) {
+        conditions.push(`(pi.house_number ILIKE $${paramIdx} OR pi.paid_by ILIKE $${paramIdx} OR pi.approved_by ILIKE $${paramIdx})`);
+        params.push(`%${search}%`);
+        paramIdx++;
+      }
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+      const sql = `
+        SELECT pi.id, pi.payment_id, pi.house_number, pi.installment_no, pi.months_span, 
+               pi.due_date, pi.amount, pi.status, pi.paid_at, pi.paid_method, pi.paid_note, pi.proof_image, pi.paid_by, pi.approved_by
+        FROM payment_installments pi
+        ${whereClause}
+        ORDER BY pi.paid_at DESC NULLS LAST, pi.due_date DESC, pi.id DESC
+        LIMIT $${paramIdx}
+      `;
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      return res.json({ ok: true, data: rows || [] });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ ok: false, message: 'Failed to fetch payment logs', error: err.message });
+    }
+  });
+
+  // GET /payment-installments/waiting-approval
+  app.get('/payment-installments/waiting-approval', authGuard, async (req, res) => {
+    try {
+      const [rows] = await pool.query(
+        `SELECT pi.id, pi.payment_id, pi.house_number, pi.installment_no, pi.months_span, 
+                pi.due_date, pi.amount, pi.status, pi.paid_at, pi.paid_method, pi.paid_note, pi.proof_image, pi.paid_by, pi.approved_by
+         FROM payment_installments pi
+         WHERE pi.status::text = 'waiting_approval'
+         ORDER BY pi.due_date ASC, pi.id ASC`
+      );
+      return res.json({ ok: true, data: rows || [] });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ ok: false, message: 'Failed to fetch waiting approval items', error: err.message });
+    }
+  });
 }
 
 module.exports = { registerPromptPayRoutes, startDailyInstallmentStatusJob, refreshInstallmentStatuses };

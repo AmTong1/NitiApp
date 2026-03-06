@@ -72,6 +72,50 @@ async function ensureRepairDeleteLogsTable() {
   }
 }
 
+// Ensure repair_edit_logs table exists
+async function ensureRepairEditLogsTable() {
+  if (!(await hasDb())) return;
+  if (await tableExists('repair_edit_logs')) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS repair_edit_logs (
+        id BIGSERIAL PRIMARY KEY,
+        repair_id INTEGER NOT NULL,
+        action VARCHAR(32) NOT NULL,
+        changes JSONB NULL,
+        performed_by INTEGER NULL,
+        performed_by_name VARCHAR(255) NULL,
+        performed_by_role VARCHAR(32) NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_repair_edit_logs_repair ON repair_edit_logs(repair_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_repair_edit_logs_created ON repair_edit_logs(created_at)`);
+    console.log('[repairs] Created repair_edit_logs table');
+  } catch (e) {
+    console.warn('ensureRepairEditLogsTable error:', e.message);
+  }
+}
+
+async function insertRepairEditLog(repairId, action, changes, user) {
+  try {
+    await ensureRepairEditLogsTable();
+    await pool.query(
+      `INSERT INTO repair_edit_logs (repair_id, action, changes, performed_by, performed_by_name, performed_by_role)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        repairId, action,
+        changes ? JSON.stringify(changes) : null,
+        user?.id || null,
+        user?.full_name || user?.username || null,
+        user?.role || null
+      ]
+    );
+  } catch (e) {
+    console.warn('insertRepairEditLog error:', e.message);
+  }
+}
+
 // Ensure allow_user_edit column exists (default true)
 async function ensureRepairsAllowUserEditColumn() {
   if (!(await hasDb())) return;
@@ -142,6 +186,8 @@ function registerRepairRoutes(app) {
   ensureRepairDeleteLogsTable().catch(e => console.warn('ensureRepairDeleteLogsTable:', e.message));
   // Ensure allow_user_edit column
   ensureRepairsAllowUserEditColumn().catch(e => console.warn('ensureRepairsAllowUserEditColumn:', e.message));
+  // Ensure repair_edit_logs table
+  ensureRepairEditLogsTable().catch(e => console.warn('ensureRepairEditLogsTable:', e.message));
 
   // Upload a generic file (returns processed URL)
   app.post('/upload', authGuard, upload.single('file'), async (req, res) => {
@@ -242,6 +288,113 @@ function registerRepairRoutes(app) {
     } catch (e) {
       console.error('GET /repairs error:', e);
       res.status(500).json({ error: `REPAIRS_LIST_FAILED: ${e.message}` });
+    }
+  });
+
+  // ===== SuperAdmin: Get all repair logs =====
+  app.get('/repairs/logs', authGuard, async (req, res) => {
+    try {
+      if (!isSuperAdmin(req.user) && !isAdmin(req.user)) {
+        return res.status(403).json({ error: 'ADMIN_ONLY' });
+      }
+
+      if (!(await hasDb()) || !(await tableExists('repairs'))) {
+        return res.json({ ok: true, data: [] });
+      }
+
+      const search = String(req.query.search || '').trim();
+      const statusFilter = String(req.query.status || '').trim();
+      const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+
+      const conditions = [];
+      const params = [];
+      let idx = 1;
+
+      if (search) {
+        conditions.push(`(r.title ILIKE $${idx} OR r.house_number ILIKE $${idx} OR r.detail ILIKE $${idx} OR a.full_name ILIKE $${idx} OR a.username ILIKE $${idx})`);
+        params.push(`%${search}%`);
+        idx++;
+      }
+      if (statusFilter && ['pending', 'in_progress', 'done'].includes(statusFilter)) {
+        conditions.push(`r.status = $${idx}::repair_status_type`);
+        params.push(statusFilter);
+        idx++;
+      }
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+      const sql = `
+        SELECT r.id, r.user_id, r.title, r.detail, r.house_number, r.status,
+               r.created_at, r.done_at,
+               a.username AS reporter_username,
+               a.full_name AS reporter_fullname
+        FROM repairs r
+        LEFT JOIN accounts a ON r.user_id = a.id
+        ${whereClause}
+        ORDER BY r.created_at DESC
+        LIMIT $${idx}
+      `;
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+
+      // Attach photos
+      if (rows.length > 0 && await tableExists('repair_photos')) {
+        const ids = rows.map(r => r.id);
+        const [photos] = await pool.query(
+          `SELECT repair_id, id, url FROM repair_photos WHERE repair_id = ANY($1) ORDER BY id ASC`,
+          [ids]
+        );
+        const photoMap = new Map();
+        for (const r of rows) photoMap.set(r.id, []);
+        for (const p of photos) photoMap.get(p.repair_id)?.push({ id: p.id, url: p.url });
+        for (const r of rows) {
+          r.photos = photoMap.get(r.id) || [];
+          r.photo_count = r.photos.length;
+        }
+      }
+
+      return res.json({ ok: true, data: rows || [] });
+    } catch (e) {
+      console.error('GET /repairs/logs error:', e);
+      res.status(500).json({ ok: false, message: 'Failed to fetch repair logs', error: e.message });
+    }
+  });
+
+  // ===== Get edit history for repairs =====
+  app.get('/repairs/edit-logs', authGuard, async (req, res) => {
+    try {
+      if (!isAdmin(req.user) && !isSuperAdmin(req.user)) {
+        return res.status(403).json({ error: 'ADMIN_ONLY' });
+      }
+      await ensureRepairEditLogsTable();
+
+      const repairId = req.query.repair_id ? Number(req.query.repair_id) : null;
+      const conditions = [];
+      const params = [];
+      let idx = 1;
+
+      if (repairId) {
+        conditions.push(`el.repair_id = $${idx++}`);
+        params.push(repairId);
+      }
+
+      const whereClause = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+      const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+
+      const [rows] = await pool.query(`
+        SELECT el.*, r.title AS repair_title, r.house_number AS repair_house_number
+        FROM repair_edit_logs el
+        LEFT JOIN repairs r ON r.id = el.repair_id
+        ${whereClause}
+        ORDER BY el.created_at DESC
+        LIMIT $${idx}
+      `, [...params, limit]);
+
+      return res.json({ ok: true, data: rows || [] });
+    } catch (e) {
+      console.error('GET /repairs/edit-logs error:', e);
+      res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
     }
   });
 
@@ -500,6 +653,24 @@ function registerRepairRoutes(app) {
 
       params.push(id);
       await pool.query(`UPDATE repairs SET ${fields.join(', ')} WHERE id = $${paramIdx}`, params);
+
+      // Log edit history
+      const editChanges = {};
+      if (title !== undefined && String(title) !== String(exist.title)) {
+        editChanges.title = { old: exist.title, new: String(title) };
+      }
+      if (detail !== undefined && String(detail ?? '') !== String(exist.detail ?? '')) {
+        editChanges.detail = { old: exist.detail || null, new: detail ?? null };
+      }
+      if (status !== undefined && String(status) !== String(exist.status)) {
+        editChanges.status = { old: exist.status, new: String(status) };
+      }
+      if (Object.keys(editChanges).length > 0) {
+        const action = status !== undefined && Object.keys(editChanges).length === 1 && editChanges.status
+          ? 'status_change' : 'edit';
+        await insertRepairEditLog(id, action, editChanges, req.user);
+      }
+
       const item = await getRepairWithPhotos(id);
       res.json(item);
     } catch (e) {

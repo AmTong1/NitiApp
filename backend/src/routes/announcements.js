@@ -3,6 +3,38 @@ const { authGuard, adminOnly } = require('../middleware/auth');
 const { hasDb, tableExists, columnExists } = require('../utils/db');
 const { HOST, PORT } = require('../config/env');
 
+// ============ Announcement Logs Helpers ============
+async function ensureAnnouncementLogsTable() {
+  if (!(await hasDb())) return false;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS announcement_logs (
+        id BIGSERIAL PRIMARY KEY,
+        action VARCHAR(32) NOT NULL,
+        announcement_id INTEGER,
+        announcement_title TEXT,
+        changes JSONB,
+        performed_by INTEGER,
+        performed_by_name VARCHAR(255),
+        performed_by_role VARCHAR(32),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_announcement_logs_created ON announcement_logs(created_at DESC)');
+    return true;
+  } catch (e) { console.error('ensureAnnouncementLogsTable error:', e); return false; }
+}
+
+async function insertAnnouncementLog(action, announcementId, announcementTitle, changes, user) {
+  try {
+    await pool.query(
+      `INSERT INTO announcement_logs (action, announcement_id, announcement_title, changes, performed_by, performed_by_name, performed_by_role)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [action, announcementId, announcementTitle, JSON.stringify(changes), user.id, user.full_name || user.username, user.role]
+    );
+  } catch (e) { console.error('insertAnnouncementLog error:', e); }
+}
+
 let mockAnnouncements = (global.mockAnnouncements ?? [
   { id: 1, title: 'จะมีการประชุมหมู่บ้าน', date: '01/10/2025', image: 'https://cdn-icons-png.flaticon.com/512/2983/2983701.png', important: true,  description: 'เชิญประชุมใหญ่สามัญประจำปี ณ ศาลาชุมชน', created_by: 1, updated_by: null },
   { id: 2, title: 'กีฬาและออกกำลังกาย',   date: '05/10/2025', image: 'https://cdn-icons-png.flaticon.com/512/2784/2784459.png', important: false, description: 'กิจกรรมออกกำลังกายทุกเย็นที่สนามหมู่บ้าน', created_by: 1, updated_by: null },
@@ -33,6 +65,9 @@ function mapImage(item) {
 }
 
 function registerAnnouncementRoutes(app) {
+  // Init logs table on startup
+  ensureAnnouncementLogsTable();
+
   // List
   app.get('/announcements', async (req, res) => {
     if (await dbReady()) {
@@ -109,6 +144,13 @@ function registerAnnouncementRoutes(app) {
                      VALUES (${placeholders.join(', ')}, NULL) RETURNING id`;
         const [result] = await pool.query(sql, values);
         const insertId = result[0]?.id;
+
+        // Log create
+        const logChanges = { title: { new: title }, date: { new: date } };
+        if (description) logChanges.description = { new: description };
+        if (important) logChanges.important = { new: true };
+        insertAnnouncementLog('create', insertId, title, logChanges, req.user);
+
         const [rows] = await pool.query(
           `SELECT a.*, acc1.full_name AS created_by_name, acc2.full_name AS updated_by_name
              FROM announcements a
@@ -137,6 +179,10 @@ function registerAnnouncementRoutes(app) {
     const { title, date, image, important, description } = req.body || {};
     if (await dbReady()) {
       try {
+        // Fetch old data before update
+        const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = $1', [id]);
+        const oldData = oldRows[0] || {};
+
         const fields = [];
         const params = [];
         let paramIdx = 1;
@@ -154,6 +200,23 @@ function registerAnnouncementRoutes(app) {
           `UPDATE announcements SET ${fields.join(', ')} WHERE id = $${paramIdx}`,
           params
         );
+
+        // Build diff for log
+        const diffFields = { title, date, image, description, important };
+        const changes = {};
+        for (const [k, v] of Object.entries(diffFields)) {
+          if (v === undefined) continue;
+          const oldVal = oldData[k];
+          const newVal = k === 'important' ? !!v : (v === null ? null : String(v));
+          const oldCmp = k === 'important' ? !!oldVal : (oldVal === null ? null : String(oldVal));
+          if (String(oldCmp) !== String(newVal)) {
+            changes[k] = { old: oldVal, new: newVal };
+          }
+        }
+        if (Object.keys(changes).length > 0) {
+          insertAnnouncementLog('update', id, oldData.title || title, changes, req.user);
+        }
+
         const [rows] = await pool.query(
           `SELECT a.*, acc1.full_name AS created_by_name, acc2.full_name AS updated_by_name
              FROM announcements a
@@ -187,7 +250,22 @@ function registerAnnouncementRoutes(app) {
     const id = Number(req.params.id);
     if (await dbReady()) {
       try {
+        // Fetch old data before delete
+        const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = $1', [id]);
+        const oldData = oldRows[0];
+
         await pool.query('DELETE FROM announcements WHERE id = $1', [id]);
+
+        // Log delete
+        if (oldData) {
+          const changes = {};
+          if (oldData.title) changes.title = { old: oldData.title };
+          if (oldData.date) changes.date = { old: oldData.date };
+          if (oldData.description) changes.description = { old: oldData.description };
+          if (oldData.important) changes.important = { old: oldData.important };
+          insertAnnouncementLog('delete', id, oldData.title, changes, req.user);
+        }
+
         return res.json({ ok: true });
       } catch (e) {
         console.error('DELETE /announcements/:id DB error:', e);
@@ -197,6 +275,45 @@ function registerAnnouncementRoutes(app) {
       mockAnnouncements = mockAnnouncements.filter(a => a.id !== id);
       global.mockAnnouncements = mockAnnouncements;
       return res.json({ ok: true });
+    }
+  });
+
+  // ============ Announcement Logs API ============
+  app.get('/announcement-logs', authGuard, adminOnly, async (req, res) => {
+    try {
+      const ok = await ensureAnnouncementLogsTable();
+      if (!ok) return res.json({ ok: true, data: [], hasMore: false });
+
+      const q = String(req.query.q || '').trim();
+      const action = String(req.query.action || '').trim();
+      const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+      const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+      const where = [];
+      const params = [];
+      let idx = 1;
+
+      if (q) {
+        where.push(`(al.announcement_title ILIKE $${idx} OR al.performed_by_name ILIKE $${idx + 1})`);
+        params.push(`%${q}%`, `%${q}%`);
+        idx += 2;
+      }
+      if (action) {
+        where.push(`al.action = $${idx}`);
+        params.push(action);
+        idx++;
+      }
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+      const [rows] = await pool.query(
+        `SELECT al.* FROM announcement_logs al ${whereSql} ORDER BY al.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...params, limit + 1, offset]
+      );
+      const hasMore = rows.length > limit;
+      if (hasMore) rows.pop();
+      return res.json({ ok: true, data: rows, hasMore });
+    } catch (e) {
+      console.error('GET /announcement-logs error:', e);
+      return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
     }
   });
 }

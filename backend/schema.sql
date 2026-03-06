@@ -14,7 +14,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-  CREATE TYPE pay_status_type AS ENUM ('paid', 'pending', 'overdue');
+  CREATE TYPE pay_status_type AS ENUM ('paid', 'pending', 'overdue', 'waiting_approval');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -268,6 +268,51 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_by BIGINT REFERENCES accounts(id) ON DELETE SET NULL
 );
+
+-- Resident Activity Logs (CRUD + month changes)
+CREATE TABLE IF NOT EXISTS resident_logs (
+  id BIGSERIAL PRIMARY KEY,
+  action VARCHAR(32) NOT NULL,            -- 'create', 'update', 'delete', 'update_months'
+  resident_id BIGINT NULL,
+  house_number VARCHAR(32) NULL,
+  resident_name VARCHAR(255) NULL,
+  changes JSONB NULL,                     -- { field: { old, new } }
+  performed_by BIGINT NULL REFERENCES accounts(id) ON DELETE SET NULL,
+  performed_by_name VARCHAR(255) NULL,
+  performed_by_role VARCHAR(32) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_resident_logs_action ON resident_logs(action);
+CREATE INDEX IF NOT EXISTS idx_resident_logs_house ON resident_logs(house_number);
+CREATE INDEX IF NOT EXISTS idx_resident_logs_created ON resident_logs(created_at);
+
+-- Repair Edit Logs (track edits to repair requests)
+CREATE TABLE IF NOT EXISTS repair_edit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  repair_id INTEGER NOT NULL,
+  action VARCHAR(32) NOT NULL,            -- 'edit', 'status_change'
+  changes JSONB NULL,                     -- { field: { old, new } }
+  performed_by INTEGER NULL REFERENCES accounts(id) ON DELETE SET NULL,
+  performed_by_name VARCHAR(255) NULL,
+  performed_by_role VARCHAR(32) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_repair_edit_logs_repair ON repair_edit_logs(repair_id);
+CREATE INDEX IF NOT EXISTS idx_repair_edit_logs_created ON repair_edit_logs(created_at);
+
+-- ========= Announcement Logs =========
+CREATE TABLE IF NOT EXISTS announcement_logs (
+  id BIGSERIAL PRIMARY KEY,
+  action VARCHAR(32) NOT NULL,
+  announcement_id INTEGER,
+  announcement_title TEXT,
+  changes JSONB,
+  performed_by INTEGER,
+  performed_by_name VARCHAR(255),
+  performed_by_role VARCHAR(32),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_announcement_logs_created ON announcement_logs(created_at DESC);
 
 -- ========= Helper Indexes =========
 CREATE INDEX IF NOT EXISTS idx_pay_status ON payments(pay_status, cover_until);

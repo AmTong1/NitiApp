@@ -70,7 +70,7 @@ function registerSettingsRoutes(app) {
         return res.status(403).json({ error: 'SUPERADMIN_ONLY' });
       }
 
-      const { updateExisting, ...updates } = req.body || {};
+      const { update_all_payments: updateExisting, ...updates } = req.body || {};
       console.log('[Settings] Received updates:', updates, 'updateExisting:', updateExisting);
       const allowedKeys = Object.keys(DEFAULT_SETTINGS);
 

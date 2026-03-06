@@ -467,7 +467,93 @@ function registerChatRoutes(app, io) {
     }
   });
 
-  // Get reactions for a message
+
+  
+  // Notification: Send payment status update to resident (Admin only)
+  app.post('/chat/notify-payment', authGuard, async (req, res) => {
+    try {
+      const { role, id: adminId } = req.user;
+      if (role !== 'admin') {
+        return res.status(403).json({ error: 'Permission denied' });
+      }
+
+      const { installment_id, status } = req.body;
+      if (!installment_id || !status) return res.status(400).json({ error: 'Missing params' });
+
+      // 1. Find resident account_id from installment
+      const [rows] = await pool.query(
+        `SELECT r.account_id, r.first_name, r.last_name, r.house_number, pi.installment_no, pi.amount
+         FROM payment_installments pi
+         JOIN payments p ON p.id = pi.payment_id
+         JOIN residents r ON r.house_number = p.house_number
+         WHERE pi.id = $1
+         LIMIT 1`,
+        [Number(installment_id)]
+      );
+      
+      const resident = rows[0];
+      if (!resident || !resident.account_id) {
+        return res.status(404).json({ error: 'Resident account not found or not linked' });
+      }
+
+      const targetUserId = resident.account_id;
+
+      // 2. Ensure DM Room exists
+      const [roomRows] = await pool.query(
+        `SELECT r.id
+         FROM chat_rooms r
+         JOIN chat_members m1 ON m1.room_id = r.id AND m1.user_id = $1
+         JOIN chat_members m2 ON m2.room_id = r.id AND m2.user_id = $2
+         WHERE r.room_type = 'dm'
+         LIMIT 1`,
+        [adminId, targetUserId]
+      );
+
+      let roomId = roomRows[0]?.id;
+      if (!roomId) {
+        // Create new DM room
+        const roomName = `DM ${resident.first_name}`;
+        const [insRoom] = await pool.query(
+          "INSERT INTO chat_rooms (name, room_type, owner_id) VALUES ($1, 'dm', $2) RETURNING id",
+          [roomName, targetUserId] // Owner is user (usually)
+        );
+        roomId = insRoom[0].id;
+        await pool.query('INSERT INTO chat_members (room_id, user_id, role) VALUES ($1, $2, $3)', [roomId, targetUserId, 'member']);
+        await pool.query('INSERT INTO chat_members (room_id, user_id, role) VALUES ($1, $2, $3)', [roomId, adminId, 'admin']);
+      }
+
+      // 3. Construct Message
+      const statusText = status === 'pending' ? 'รอชำระ' : status === 'overdue' ? 'ค้างชำระ' : status;
+      const amountFmt = Number(resident.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+      const message = `🔔 แจ้งเตือนสถานะการชำระเงิน\n\nงวดที่ ${resident.installment_no} (บ้านเลขที่ ${resident.house_number})\nยอดชําระ: ${amountFmt} บาท\nสถานะปัจจุบัน: ${statusText}\n\nกรุณาตรวจสอบและดำเนินการชำระเงิน`;
+
+      // 4. Send Message
+      const [insMsg] = await pool.query(
+        `INSERT INTO chat_messages (room_id, user_id, text, msg_type)
+         VALUES ($1, $2, $3, 'text') RETURNING id`,
+        [roomId, adminId, message]
+      );
+      
+      const insertId = insMsg[0].id;
+      const [msgRows] = await pool.query(
+        `SELECT m.*, a.username, a.full_name
+         FROM chat_messages m
+         JOIN accounts a ON a.id = m.user_id
+         WHERE m.id = $1`,
+        [insertId]
+      );
+      
+      const msg = msgRows[0];
+      io.to(`room:${roomId}`).emit('new_message', msg);
+
+      return res.json({ ok: true, message: 'Notification sent' });
+
+    } catch (e) {
+      console.error('Notify payment error:', e);
+      res.status(500).json({ error: e.message || 'Server Error' });
+    }
+  });
+
   app.get('/chat/reactions/:messageId', authGuard, async (req, res) => {
     try {
       const messageId = Number(req.params.messageId);

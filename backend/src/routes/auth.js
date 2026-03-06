@@ -298,6 +298,48 @@ function registerAuthRoutes(app) {
       res.status(500).json({ error: 'SERVER_ERROR' });
     }
   });
+  // ===== SuperAdmin: Update admin =====
+  app.put('/auth/admins/:id', authGuard, async (req, res) => {
+    try {
+      if (!isSuperAdmin(req.user)) {
+        return res.status(403).json({ error: 'SUPERADMIN_ONLY' });
+      }
+
+      const adminId = Number(req.params.id);
+      const { full_name, password } = req.body || {};
+
+      // Check if target exists
+      const [target] = await pool.query('SELECT role FROM accounts WHERE id = $1', [adminId]);
+      if (!target[0]) {
+        return res.status(404).json({ error: 'NOT_FOUND' });
+      }
+      
+      // Prevent modifying other SuperAdmins (unless self, but usually superadmin edits self via /me)
+      if (target[0].role === 'superadmin' && adminId !== req.user.id) {
+        return res.status(403).json({ error: 'CANNOT_EDIT_SUPERADMIN' });
+      }
+
+      // Update full_name
+      if (full_name !== undefined) {
+         await pool.query('UPDATE accounts SET full_name = $1 WHERE id = $2', [full_name, adminId]);
+      }
+
+      // Update password if provided
+      if (password && String(password).length >= 6) {
+        const hash = await bcrypt.hash(String(password), 10);
+        await pool.query('UPDATE accounts SET password_hash = $1 WHERE id = $2', [hash, adminId]);
+      }
+
+      // Return updated info
+      const [updated] = await pool.query('SELECT id, username, full_name, role, created_at FROM accounts WHERE id = $1', [adminId]);
+      res.json({ ok: true, admin: updated[0] });
+
+    } catch (e) {
+      console.error('Update admin error:', e);
+      res.status(500).json({ error: 'SERVER_ERROR' });
+    }
+  });
+
 }
 
 module.exports = { registerAuthRoutes };
