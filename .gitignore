@@ -20,8 +20,15 @@ backend/qrs/
 *.zip
 *.rar
 *.7z
+BUp/
+proj.rar
 
 # OS / editor noise
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Separated Apps
+MyApp/
+node_modules/
+../BUp/
