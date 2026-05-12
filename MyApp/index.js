@@ -1,6 +1,7 @@
 // index.js
 import React from 'react';
 import { AppRegistry, Text, TextInput } from 'react-native';
+import './src/lib/enableResponsiveStyleSheet';
 import App from './App';
 import { name as appName } from './app.json';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';

@@ -71,8 +71,12 @@ JWT_SECRET=change_me
 JWT_EXPIRES=7d
 ADMIN_KEY=change_me
 
-SLIPOK_API=https://api.slipok.com/api/line/verify
-SLIPOK_KEY=your_slipok_key
+SLIP2GO_API=https://api.slip2go.com
+SLIP2GO_SECRET=your_slip2go_secret
+
+# Backward compatibility (optional)
+SLIPOK_API=
+SLIPOK_KEY=
 PROMPTPAY_ID=0812345678
 PROMPTPAY_DEFAULT_AMOUNT=0
 

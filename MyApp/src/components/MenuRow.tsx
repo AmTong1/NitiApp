@@ -6,12 +6,14 @@ type MenuRowProps = {
   onCashPress?: () => void;
   onCallPress?: () => void;
   onConstructPress?: () => void;
+  onFinancialPress?: () => void;
 };
 
 const MenuRow: React.FC<MenuRowProps> = ({ 
   onCashPress, 
   onCallPress, 
-  onConstructPress 
+  onConstructPress,
+  onFinancialPress
 }) => {
   return (
     <View style={styles.menuRow}>
@@ -23,6 +25,9 @@ const MenuRow: React.FC<MenuRowProps> = ({
       </TouchableOpacity>
       <TouchableOpacity style={styles.menuButton} onPress={onConstructPress}>
         <Ionicons name="construct" size={28} color="#666" />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.menuButton} onPress={onFinancialPress}>
+        <Ionicons name="wallet" size={28} color="#666" />
       </TouchableOpacity>
     </View>
   );

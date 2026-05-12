@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, TouchableWithoutFeedback, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, TouchableWithoutFeedback, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import type { Announcement } from '../types';
+import { useI18n } from '../i18n';
 
 type AnnouncementListProps = {
   data: Announcement[];
   onMore: () => void;
   darkMode?: boolean;
 };
+
+const SCREEN = Dimensions.get('window');
 
 const toDate = (s?: string | null): Date | null => {
   if (!s) return null;
@@ -42,11 +45,61 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
   onMore, 
   darkMode = false 
 }) => {
+  const { t, lang } = useI18n();
   const cardBg = darkMode ? '#2C2C2C' : '#FFFFFF';
   const textColor = darkMode ? '#FFFFFF' : '#333333';
   const dateColor = darkMode ? '#B0BEC5' : '#666666';
   const itemBg  = darkMode ? '#1F1F1F' : '#F8F9FA';
   const [openItem, setOpenItem] = useState<Announcement | null>(null);
+  const [modalImageAspect, setModalImageAspect] = useState<number>(4 / 3);
+
+  const modalImageStyle = useMemo(() => {
+    const ratio = modalImageAspect > 0 ? modalImageAspect : 4 / 3;
+    const maxWidth = Math.round(SCREEN.width * 0.88);
+    const maxHeight = Math.round(SCREEN.height * 0.32);
+
+    let width = maxWidth;
+    if (width / ratio > maxHeight) {
+      width = Math.round(maxHeight * ratio);
+    }
+
+    return { width, aspectRatio: ratio };
+  }, [modalImageAspect]);
+
+  const handleModalImageLoad = useCallback((event: any) => {
+    const width = Number(event?.nativeEvent?.source?.width || 0);
+    const height = Number(event?.nativeEvent?.source?.height || 0);
+    if (width > 0 && height > 0) {
+      setModalImageAspect(width / height);
+    }
+  }, []);
+
+  useEffect(() => {
+    const uri = openItem?.image;
+    if (!uri) {
+      setModalImageAspect(4 / 3);
+      return;
+    }
+
+    let cancelled = false;
+
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (cancelled) return;
+        if (width > 0 && height > 0) {
+          setModalImageAspect(width / height);
+        }
+      },
+      () => {
+        if (!cancelled) setModalImageAspect(4 / 3);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [openItem?.image]);
 
   return (
     // ✅ เอา padding ขอบซ้าย-ขวาออก เพื่อให้เต็มจอจริง ๆ
@@ -59,11 +112,11 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
               <Ionicons name="megaphone" size={16} color="#FF6B35" />
             </View>
             <Text style={[styles.announcementTitle, { color: textColor }]}>
-              ประกาศข่าวสาร
+              {t('annTitle')}
             </Text>
           </View>
           <TouchableOpacity style={styles.viewAllButton} onPress={onMore}>
-            <Text style={styles.viewAllText}>ดูทั้งหมด</Text>
+            <Text style={styles.viewAllText}>{t('readMore')}</Text>
             <Ionicons name="chevron-forward" size={14} color="#4CAF50" />
           </TouchableOpacity>
         </View>
@@ -105,7 +158,7 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
 
         {/* Footer */}
         <TouchableOpacity style={styles.showMoreButton} onPress={onMore}>
-          <Text style={styles.showMoreText}>ดูประกาศเพิ่มเติม</Text>
+          <Text style={styles.showMoreText}>{t('readMore')}</Text>
           <Ionicons name="arrow-forward" size={14} color="#4CAF50" />
         </TouchableOpacity>
       </View>
@@ -125,22 +178,23 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
                 </TouchableOpacity>
                 {!!openItem && (
                   <>
-                    <Text style={[styles.modalTitle, { color: textColor }]}>{openItem.title || 'ประกาศ'}</Text>
+                    <Text style={[styles.modalTitle, { color: textColor }]}>{openItem.title || t('announcement')}</Text>
                     <ScrollView style={styles.modalScroll}>
                       {openItem.image && (
                          <Image 
                            source={{ uri: openItem.image }} 
-                           style={styles.modalImage} 
-                           resizeMode="cover"
+                           style={[styles.modalImage, modalImageStyle]}
+                           onLoad={handleModalImageLoad}
+                           resizeMode="contain"
                          />
                       )}
 
-                      <Text style={[styles.modalLabel, { color: dateColor }]}>รายละเอียด</Text>
+                      <Text style={[styles.modalLabel, { color: dateColor }]}>{t('details')}</Text>
                       <Text style={[styles.modalDesc, { color: textColor }]}>
                         {openItem.description || '-'}
                       </Text>
 
-                      <Text style={[styles.modalLabel, { color: dateColor, marginTop: 12 }]}>วันที่</Text>
+                      <Text style={[styles.modalLabel, { color: dateColor, marginTop: 12 }]}>{t('annDate')}</Text>
                       <View style={styles.modalDateRow}>
                         <Ionicons name="calendar-outline" size={16} color="#2E7D32" />
                         <Text style={styles.modalDateText}>{formatBeThai(openItem.date)}</Text>
@@ -158,7 +212,7 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // ✅ ลบ padding ข้างๆ เพื่อให้การ์ดเต็มหน้าจอ
+  // Keep a tiny gutter so the card doesn't look like it spills out on Home.
   container: {
     width: '100%',
     alignSelf: 'stretch',
@@ -167,11 +221,11 @@ const styles = StyleSheet.create({
 
   announcementCard: { 
     width: '100%',
-    alignSelf: 'stretch',     // ✅ บังคับให้ยืดเต็ม parent
+    alignSelf: 'stretch',
     borderRadius: 16, 
     padding: 15,
     marginVertical: 8,
-    marginHorizontal: 0,      // ✅ ไม่เว้นขอบซ้าย-ขวา
+    marginHorizontal: 0,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -179,6 +233,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
+    overflow: 'hidden',
   },
 
   headerContainer: {
@@ -318,20 +373,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   modalCard: {
-    width: '92%',
+    width: '94%',
     maxWidth: 520,
     borderRadius: 18,
-    padding: 18,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#EAEAEA',
   },
   modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 10 },
   modalImage: {
-    width: '100%',
-    height: 200,
     borderRadius: 12,
     marginBottom: 16,
-    backgroundColor: '#F5F5F5',
+    alignSelf: 'center',
   },
   modalLabel: { fontSize: 12, fontWeight: '700', marginBottom: 6 },
   modalDesc: { fontSize: 14, lineHeight: 20 },

@@ -4,8 +4,8 @@ const multer = require('multer');
 const sharp = require('sharp');
 const { pool } = require('../db/pool');
 const { authGuard } = require('../middleware/auth');
-const { hasDb, tableExists, columnExists } = require('../utils/db');
-const { nowIso2, rand3, isAdmin, isSuperAdmin } = require('../utils/misc');
+const { hasDb, tableExists, columnExists, indexExists } = require('../utils/db');
+const { nowIso2, rand3, randRepairId, isAdmin, isSuperAdmin } = require('../utils/misc');
 const { UPLOAD_DIR, PROCESSED_DIR } = require('../config/paths');
 const { buildBatchInsert } = require('../utils/pgHelper');
 
@@ -14,11 +14,15 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const fileFilter = (req, file, cb) => cb(null, true);
-const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
 let memRepairs = []; // {id,user_id,title,detail,house_number,status,created_at, photos?:[{id,url}]}
 let memPhotos  = [];
 let memPhotoSeq = 1;
+
+function inClause(values) {
+  return values.map(() => '?').join(', ');
+}
 
 // Ensure house_number column exists in repairs table
 async function ensureRepairsHouseNumberColumn() {
@@ -55,15 +59,15 @@ async function ensureRepairDeleteLogsTable() {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS repair_delete_logs (
-        id SERIAL PRIMARY KEY,
-        repair_id INTEGER NOT NULL,
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        repair_id VARCHAR(32) NOT NULL,
         repair_title VARCHAR(255),
         repair_detail TEXT,
         repair_house_number VARCHAR(32),
         repair_status VARCHAR(32),
         deleted_by INTEGER NOT NULL,
         delete_reason TEXT,
-        deleted_at TIMESTAMP DEFAULT NOW()
+        deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('[repairs] Created repair_delete_logs table');
@@ -79,18 +83,22 @@ async function ensureRepairEditLogsTable() {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS repair_edit_logs (
-        id BIGSERIAL PRIMARY KEY,
-        repair_id INTEGER NOT NULL,
+        id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        repair_id VARCHAR(32) NOT NULL,
         action VARCHAR(32) NOT NULL,
-        changes JSONB NULL,
+        changes JSON NULL,
         performed_by INTEGER NULL,
         performed_by_name VARCHAR(255) NULL,
         performed_by_role VARCHAR(32) NULL,
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_repair_edit_logs_repair ON repair_edit_logs(repair_id)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_repair_edit_logs_created ON repair_edit_logs(created_at)`);
+    if (!(await indexExists('repair_edit_logs', 'idx_repair_edit_logs_repair'))) {
+      await pool.query('CREATE INDEX idx_repair_edit_logs_repair ON repair_edit_logs(repair_id)');
+    }
+    if (!(await indexExists('repair_edit_logs', 'idx_repair_edit_logs_created'))) {
+      await pool.query('CREATE INDEX idx_repair_edit_logs_created ON repair_edit_logs(created_at)');
+    }
     console.log('[repairs] Created repair_edit_logs table');
   } catch (e) {
     console.warn('ensureRepairEditLogsTable error:', e.message);
@@ -102,7 +110,7 @@ async function insertRepairEditLog(repairId, action, changes, user) {
     await ensureRepairEditLogsTable();
     await pool.query(
       `INSERT INTO repair_edit_logs (repair_id, action, changes, performed_by, performed_by_name, performed_by_role)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         repairId, action,
         changes ? JSON.stringify(changes) : null,
@@ -113,6 +121,41 @@ async function insertRepairEditLog(repairId, action, changes, user) {
     );
   } catch (e) {
     console.warn('insertRepairEditLog error:', e.message);
+  }
+}
+
+async function migrateRepairIdToVarchar() {
+  if (!(await hasDb())) return;
+  if (!(await tableExists('repairs'))) return;
+  try {
+    const [rows] = await pool.query(`SHOW COLUMNS FROM repairs LIKE 'id'`);
+    if (rows.length > 0 && rows[0].Type.toLowerCase().includes('int')) {
+      console.log('[repairs] Migrating repairs.id to VARCHAR(32)...');
+      
+      if (await tableExists('repair_photos')) {
+        const [fk1] = await pool.query(`SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'repair_photos' AND COLUMN_NAME = 'repair_id' AND REFERENCED_TABLE_NAME = 'repairs'`);
+        if (fk1.length > 0) {
+          await pool.query(`ALTER TABLE repair_photos DROP FOREIGN KEY ${fk1[0].CONSTRAINT_NAME}`);
+        }
+      }
+      
+      await pool.query(`ALTER TABLE repairs MODIFY COLUMN id VARCHAR(32) NOT NULL`);
+      
+      if (await tableExists('repair_photos')) {
+        await pool.query(`ALTER TABLE repair_photos MODIFY COLUMN repair_id VARCHAR(32) NOT NULL`);
+        await pool.query(`ALTER TABLE repair_photos ADD CONSTRAINT fk_repair_photos_repair_id FOREIGN KEY (repair_id) REFERENCES repairs(id) ON DELETE CASCADE`);
+      }
+      if (await tableExists('repair_delete_logs')) {
+         await pool.query(`ALTER TABLE repair_delete_logs MODIFY COLUMN repair_id VARCHAR(32) NOT NULL`);
+      }
+      if (await tableExists('repair_edit_logs')) {
+         await pool.query(`ALTER TABLE repair_edit_logs MODIFY COLUMN repair_id VARCHAR(32) NOT NULL`);
+      }
+      
+      console.log('[repairs] Migrated repairs.id to VARCHAR(32) successfully');
+    }
+  } catch (e) {
+    console.warn('migrateRepairIdToVarchar error:', e.message);
   }
 }
 
@@ -141,13 +184,13 @@ async function repairColumns() {
 }
 async function getRepairByIdDb(id) {
   const cols = await repairColumns();
-  const [rows] = await pool.query(`SELECT ${cols} FROM repairs WHERE id = $1`, [id]);
+  const [rows] = await pool.query(`SELECT ${cols} FROM repairs WHERE id = ?`, [id]);
   return rows[0] || null;
 }
 
 async function getPhotos(repairId) {
   const [rows] = await pool.query(
-    `SELECT id, url FROM repair_photos WHERE repair_id = $1 ORDER BY id ASC`,
+    `SELECT id, url FROM repair_photos WHERE repair_id = ? ORDER BY id ASC`,
     [repairId]
   );
   return rows;
@@ -165,10 +208,10 @@ async function getRepairWithPhotos(id) {
 async function attachPhotosToList(items) {
   if (!Array.isArray(items) || items.length === 0) return items;
   const ids = items.map(r => r.id);
-  // PostgreSQL: use ANY($1) for array
+  const placeholders = inClause(ids);
   const [ph] = await pool.query(
-    `SELECT repair_id, id, url FROM repair_photos WHERE repair_id = ANY($1)`,
-    [ids]
+    `SELECT repair_id, id, url FROM repair_photos WHERE repair_id IN (${placeholders})`,
+    ids
   );
   const map = new Map();
   for (const r of items) map.set(r.id, []);
@@ -178,6 +221,8 @@ async function attachPhotosToList(items) {
 }
 
 function registerRepairRoutes(app) {
+  // Ensure repairs.id is VARCHAR(32)
+  migrateRepairIdToVarchar().catch(e => console.warn('migrateRepairIdToVarchar:', e.message));
   // Ensure house_number column on startup
   ensureRepairsHouseNumberColumn().catch(e => console.warn('ensureRepairsHouseNumberColumn:', e.message));
   // Ensure done_at column on startup
@@ -243,7 +288,7 @@ function registerRepairRoutes(app) {
       if (!isAdmin(req.user)) {
         // หา house_number ที่ user เป็นเจ้าของ
         const [houseRows] = await pool.query(
-          `SELECT house_number FROM residents WHERE account_id = $1`,
+          `SELECT house_number FROM residents WHERE account_id = ?`,
           [req.user.id]
         );
         userHouseNumbers = houseRows.map(r => r.house_number);
@@ -256,15 +301,15 @@ function registerRepairRoutes(app) {
       if (userId) {
         // user เห็นได้ทั้งที่ user_id ตรง และ house_number ที่เป็นเจ้าของ
         if (userHouseNumbers.length > 0) {
-          where.push(`(user_id = $1 OR house_number = ANY($2))`);
-          params.push(userId, userHouseNumbers);
+          where.push(`(user_id = ? OR house_number IN (${inClause(userHouseNumbers)}))`);
+          params.push(userId, ...userHouseNumbers);
           // สำหรับ user: ซ่อน done ที่เกิน 7 วัน
-          where.push(`(status != 'done' OR (status = 'done' AND done_at > NOW() - INTERVAL '7 days'))`);
+          where.push(`(status != 'done' OR (status = 'done' AND done_at > DATE_SUB(NOW(), INTERVAL 7 DAY)))`);
         } else {
-          where.push('user_id = $1');
+          where.push('user_id = ?');
           params.push(userId);
           // สำหรับ user: ซ่อน done ที่เกิน 7 วัน
-          where.push(`(status != 'done' OR (status = 'done' AND done_at > NOW() - INTERVAL '7 days'))`);
+          where.push(`(status != 'done' OR (status = 'done' AND done_at > DATE_SUB(NOW(), INTERVAL 7 DAY)))`);
         }
       }
       
@@ -280,8 +325,9 @@ function registerRepairRoutes(app) {
         `SELECT ${cols}
            FROM repairs
          ${whereSql}
-         ${orderBy}`,
-        params
+         ${orderBy}
+         LIMIT ?`,
+        [...params, 100]
       );
       if (await tableExists('repair_photos')) await attachPhotosToList(rows);
       res.json(rows);
@@ -308,31 +354,30 @@ function registerRepairRoutes(app) {
 
       const conditions = [];
       const params = [];
-      let idx = 1;
 
       if (search) {
-        conditions.push(`(r.title ILIKE $${idx} OR r.house_number ILIKE $${idx} OR r.detail ILIKE $${idx} OR a.full_name ILIKE $${idx} OR a.username ILIKE $${idx})`);
-        params.push(`%${search}%`);
-        idx++;
+        conditions.push('(LOWER(r.title) LIKE ? OR LOWER(r.house_number) LIKE ? OR LOWER(r.detail) LIKE ? OR LOWER(a.full_name) LIKE ? OR LOWER(a.username) LIKE ?)');
+        const searchParam = `%${search.toLowerCase()}%`;
+        params.push(searchParam, searchParam, searchParam, searchParam, searchParam);
       }
       if (statusFilter && ['pending', 'in_progress', 'done'].includes(statusFilter)) {
-        conditions.push(`r.status = $${idx}::repair_status_type`);
+        conditions.push('r.status = ?');
         params.push(statusFilter);
-        idx++;
       }
 
       const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
       const sql = `
         SELECT r.id, r.user_id, r.title, r.detail, r.house_number, r.status,
-               r.created_at, r.done_at,
+           DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+           DATE_FORMAT(r.done_at, '%Y-%m-%d %H:%i:%s') AS done_at,
                a.username AS reporter_username,
                a.full_name AS reporter_fullname
         FROM repairs r
         LEFT JOIN accounts a ON r.user_id = a.id
         ${whereClause}
         ORDER BY r.created_at DESC
-        LIMIT $${idx}
+        LIMIT ?
       `;
       params.push(limit);
 
@@ -341,9 +386,10 @@ function registerRepairRoutes(app) {
       // Attach photos
       if (rows.length > 0 && await tableExists('repair_photos')) {
         const ids = rows.map(r => r.id);
+        const placeholders = inClause(ids);
         const [photos] = await pool.query(
-          `SELECT repair_id, id, url FROM repair_photos WHERE repair_id = ANY($1) ORDER BY id ASC`,
-          [ids]
+          `SELECT repair_id, id, url FROM repair_photos WHERE repair_id IN (${placeholders}) ORDER BY id ASC`,
+          ids
         );
         const photoMap = new Map();
         for (const r of rows) photoMap.set(r.id, []);
@@ -372,10 +418,9 @@ function registerRepairRoutes(app) {
       const repairId = req.query.repair_id ? Number(req.query.repair_id) : null;
       const conditions = [];
       const params = [];
-      let idx = 1;
 
       if (repairId) {
-        conditions.push(`el.repair_id = $${idx++}`);
+        conditions.push('el.repair_id = ?');
         params.push(repairId);
       }
 
@@ -383,12 +428,22 @@ function registerRepairRoutes(app) {
       const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
 
       const [rows] = await pool.query(`
-        SELECT el.*, r.title AS repair_title, r.house_number AS repair_house_number
+        SELECT
+          el.id,
+          el.repair_id,
+          el.action,
+          el.changes,
+          el.performed_by,
+          el.performed_by_name,
+          el.performed_by_role,
+          DATE_FORMAT(el.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+          r.title AS repair_title,
+          r.house_number AS repair_house_number
         FROM repair_edit_logs el
         LEFT JOIN repairs r ON r.id = el.repair_id
         ${whereClause}
         ORDER BY el.created_at DESC
-        LIMIT $${idx}
+        LIMIT ?
       `, [...params, limit]);
 
       return res.json({ ok: true, data: rows || [] });
@@ -421,7 +476,7 @@ function registerRepairRoutes(app) {
           dl.repair_status,
           dl.deleted_by,
           dl.delete_reason,
-          dl.deleted_at,
+          DATE_FORMAT(dl.deleted_at, '%Y-%m-%d %H:%i:%s') AS deleted_at,
           a.username as deleted_by_username,
           a.full_name as deleted_by_fullname,
           a.role as deleted_by_role,
@@ -452,8 +507,8 @@ function registerRepairRoutes(app) {
   // Get one repair (+photos)
   app.get('/repairs/:id', authGuard, async (req, res) => {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: 'INVALID_ID' });
+      const id = String(req.params.id).trim();
+      if (!id) return res.status(400).json({ error: 'INVALID_ID' });
       const usable = (await hasDb()) && (await tableExists('repairs'));
 
       if (!usable) {
@@ -475,7 +530,7 @@ function registerRepairRoutes(app) {
         
         if (item.house_number) {
           const [houseRows] = await pool.query(
-            `SELECT account_id FROM residents WHERE house_number = $1`,
+            `SELECT account_id FROM residents WHERE house_number = ?`,
             [item.house_number]
           );
           isOwnerByHouse = houseRows.length > 0 && String(houseRows[0].account_id) === String(req.user.id);
@@ -515,7 +570,7 @@ function registerRepairRoutes(app) {
       if (isAdmin(req.user) && cleanHouseNumber) {
         try {
           const [ownerRows] = await pool.query(
-            `SELECT account_id FROM residents WHERE house_number = $1`,
+            `SELECT account_id FROM residents WHERE house_number = ?`,
             [cleanHouseNumber]
           );
           if (ownerRows.length > 0 && ownerRows[0].account_id) {
@@ -531,7 +586,7 @@ function registerRepairRoutes(app) {
 
       if (!usable) {
         let id, tries = 0;
-        do { id = rand3(); tries++; if (tries > 1000) return res.status(409).json({ error:'ID_SPACE_EXHAUSTED' }); }
+        do { id = randRepairId(); tries++; if (tries > 1000) return res.status(409).json({ error:'ID_SPACE_EXHAUSTED' }); }
         while (memRepairs.some(r => r.id === id));
 
         const item = { id, user_id: userId, title: cleanTitle, detail: cleanDetail, house_number: cleanHouseNumber, status: 'pending', created_at: nowIso2(), photos: [], allow_user_edit: finalAllowEdit };
@@ -554,13 +609,13 @@ function registerRepairRoutes(app) {
           if (hasCol) {
              await pool.query(
               `INSERT INTO repairs (id, user_id, title, detail, house_number, status, allow_user_edit)
-               VALUES ($1, $2, $3, $4, $5, 'pending', $6)`,
+               VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
               [id, userId, cleanTitle, cleanDetail, cleanHouseNumber, finalAllowEdit]
             );
           } else {
              await pool.query(
               `INSERT INTO repairs (id, user_id, title, detail, house_number, status)
-               VALUES ($1, $2, $3, $4, $5, 'pending')`,
+               VALUES (?, ?, ?, ?, ?, 'pending')`,
               [id, userId, cleanTitle, cleanDetail, cleanHouseNumber]
             );
           }
@@ -572,8 +627,7 @@ function registerRepairRoutes(app) {
           const item = await getRepairWithPhotos(id);
           return res.status(201).json(item);
         } catch (err) {
-          // PostgreSQL: duplicate key error code is 23505
-          if (err && err.code === '23505') { attempts++; continue; }
+          if (err && (err.code === '23505' || err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) { attempts++; continue; }
           throw err;
         }
       }
@@ -587,8 +641,8 @@ function registerRepairRoutes(app) {
   // Update repair
   app.put('/repairs/:id', authGuard, async (req, res) => {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: 'INVALID_ID' });
+      const id = String(req.params.id).trim();
+      if (!id) return res.status(400).json({ error: 'INVALID_ID' });
       const { title, detail, status } = req.body || {};
       const usable = (await hasDb()) && (await tableExists('repairs'));
 
@@ -622,7 +676,7 @@ function registerRepairRoutes(app) {
         return res.json(item);
       }
 
-      const [rows0] = await pool.query(`SELECT * FROM repairs WHERE id = $1`, [id]);
+      const [rows0] = await pool.query(`SELECT * FROM repairs WHERE id = ?`, [id]);
       const exist = rows0[0];
       if (!exist) return res.status(404).json({ error: 'NOT_FOUND' });
       const owner = String(exist.user_id) === String(req.user.id);
@@ -634,14 +688,13 @@ function registerRepairRoutes(app) {
       }
 
       const fields = [], params = [];
-      let paramIdx = 1;
-      if (title  !== undefined) { fields.push(`title = $${paramIdx++}`);  params.push(String(title)); }
-      if (detail !== undefined) { fields.push(`detail = $${paramIdx++}`); params.push(detail ?? null); }
+      if (title  !== undefined) { fields.push('title = ?');  params.push(String(title)); }
+      if (detail !== undefined) { fields.push('detail = ?'); params.push(detail ?? null); }
       if (status !== undefined) {
         if (!isAdmin(req.user)) return res.status(403).json({ error: 'ONLY_ADMIN_CAN_UPDATE_STATUS' });
         const st = String(status);
         if (!['pending','in_progress','done'].includes(st)) return res.status(400).json({ error: 'INVALID_STATUS' });
-        fields.push(`status = $${paramIdx++}`); params.push(st);
+        fields.push('status = ?'); params.push(st);
         // track done_at: set เมื่อเปลี่ยนเป็น done, clear เมื่อเปลี่ยนเป็นอย่างอื่น
         if (st === 'done' && exist.status !== 'done') {
           fields.push(`done_at = NOW()`);
@@ -652,7 +705,7 @@ function registerRepairRoutes(app) {
       if (fields.length === 0) return res.status(400).json({ error: 'NO_FIELDS_TO_UPDATE' });
 
       params.push(id);
-      await pool.query(`UPDATE repairs SET ${fields.join(', ')} WHERE id = $${paramIdx}`, params);
+      await pool.query(`UPDATE repairs SET ${fields.join(', ')} WHERE id = ?`, params);
 
       // Log edit history
       const editChanges = {};
@@ -682,8 +735,8 @@ function registerRepairRoutes(app) {
   // Delete repair (cascade photos) - รับ delete_reason สำหรับบันทึก log
   app.delete('/repairs/:id', authGuard, async (req, res) => {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: 'INVALID_ID' });
+      const id = String(req.params.id).trim();
+      if (!id) return res.status(400).json({ error: 'INVALID_ID' });
       const { delete_reason } = req.body || {};
       const usable = (await hasDb()) && (await tableExists('repairs'));
       if (!usable) {
@@ -697,7 +750,7 @@ function registerRepairRoutes(app) {
         return res.json({ ok: true });
       }
 
-      const [rows0] = await pool.query(`SELECT * FROM repairs WHERE id = $1`, [id]);
+      const [rows0] = await pool.query(`SELECT * FROM repairs WHERE id = ?`, [id]);
       const exist = rows0[0];
       if (!exist) return res.status(404).json({ error: 'NOT_FOUND' });
       const owner = String(exist.user_id) === String(req.user.id);
@@ -707,13 +760,13 @@ function registerRepairRoutes(app) {
       if (await tableExists('repair_delete_logs')) {
         await pool.query(
           `INSERT INTO repair_delete_logs (repair_id, repair_title, repair_detail, repair_house_number, repair_status, deleted_by, delete_reason)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [id, exist.title, exist.detail, exist.house_number, exist.status, req.user.id, delete_reason || null]
         );
       }
 
-      await pool.query(`DELETE FROM repair_photos WHERE repair_id = $1`, [id]);
-      await pool.query(`DELETE FROM repairs WHERE id = $1`, [id]);
+      await pool.query(`DELETE FROM repair_photos WHERE repair_id = ?`, [id]);
+      await pool.query(`DELETE FROM repairs WHERE id = ?`, [id]);
       res.json({ ok: true });
     } catch (e) {
       console.error('DELETE /repairs/:id error:', e);
@@ -724,8 +777,8 @@ function registerRepairRoutes(app) {
   // Upload a photo to a repair
   app.post('/repairs/:id/image', authGuard, upload.single('file'), async (req, res) => {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ error: 'INVALID_ID' });
+      const id = String(req.params.id).trim();
+      if (!id) return res.status(400).json({ error: 'INVALID_ID' });
       if (!req.file) return res.status(400).json({ error: 'FILE_REQUIRED' });
 
       const usable = (await hasDb()) && (await tableExists('repairs'));
@@ -777,7 +830,7 @@ function registerRepairRoutes(app) {
         .toFile(path.join(PROCESSED_DIR, outName));
 
       const url = `/uploads/repairs/${outName}`;
-      await pool.query(`INSERT INTO repair_photos (repair_id, url) VALUES ($1, $2)`, [id, url]);
+      await pool.query(`INSERT INTO repair_photos (repair_id, url) VALUES (?, ?)`, [id, url]);
       const item = await getRepairWithPhotos(id);
       res.json(item);
     } catch (e) {
@@ -789,9 +842,9 @@ function registerRepairRoutes(app) {
   // Delete one photo from a repair
   app.delete('/repairs/:id/image/:pid', authGuard, async (req, res) => {
     try {
-      const id = Number(req.params.id);
+      const id = String(req.params.id).trim();
       const pid = Number(req.params.pid);
-      if (isNaN(id) || isNaN(pid)) return res.status(400).json({ error: 'INVALID_ID' });
+      if (!id || isNaN(pid)) return res.status(400).json({ error: 'INVALID_ID' });
       const usable = (await hasDb()) && (await tableExists('repairs'));
 
       // Helper to remove physical file if it exists
@@ -841,14 +894,14 @@ function registerRepairRoutes(app) {
       }
 
       const [rows] = await pool.query(
-        `SELECT id, url FROM repair_photos WHERE id = $1 AND repair_id = $2`,
+        `SELECT id, url FROM repair_photos WHERE id = ? AND repair_id = ?`,
 
         [pid, id]
       );
       const photo = rows[0];
       if (!photo) return res.status(404).json({ error: 'PHOTO_NOT_FOUND' });
 
-      await pool.query(`DELETE FROM repair_photos WHERE id = $1 AND repair_id = $2`, [pid, id]);
+      await pool.query(`DELETE FROM repair_photos WHERE id = ? AND repair_id = ?`, [pid, id]);
       await removeFileByUrl(photo.url);
       return res.json({ ok: true });
     } catch (e) {

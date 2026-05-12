@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform, Modal
 } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from '../../components/GlobalAlert';
@@ -34,11 +35,25 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, darkMode = false })
   
   const [settings, setSettings] = useState({
     rate_per_sqm: '',
-    slipok_api: '',
-    slipok_key: '',
+    slip2go_api: '',
+    slip2go_secret: '',
     promptpay_id: '',
+    receiver_name: '',
     qr_expiry_days: '',
+    installment_rollover_before_days: '',
   });
+
+  const formatDdMmYyyy = (d: Date) => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const sampleCycleEndDate = new Date(2026, 2, 25); // 25/03/2026
+  const leadDays = Math.max(0, Number(settings.installment_rollover_before_days || '0') || 0);
+  const sampleTriggerDate = new Date(sampleCycleEndDate.getTime());
+  sampleTriggerDate.setDate(sampleTriggerDate.getDate() - leadDays);
 
   const colors = themeColors;
 
@@ -53,10 +68,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, darkMode = false })
       if (res.ok) {
         setSettings({
           rate_per_sqm: String(data.rate_per_sqm || ''),
-          slipok_api: data.slipok_api || '',
-          slipok_key: data.slipok_key || '',
+          // Key-only mode: URL is optional and resolved automatically by backend.
+          slip2go_api: '',
+          slip2go_secret: data.slip2go_secret || data.slipok_key || '',
           promptpay_id: data.promptpay_id || '',
+          receiver_name: data.receiver_name || '',
           qr_expiry_days: String(data.qr_expiry_days || ''),
+          installment_rollover_before_days: String(data.installment_rollover_before_days || '0'),
         });
         setOriginalRate(String(data.rate_per_sqm || ''));
       }
@@ -72,6 +90,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, darkMode = false })
   }, []);
 
   const handleSaveSettings = () => {
+    const promptPay = String(settings.promptpay_id || '').trim();
+    if (!/^\d{10}$/.test(promptPay)) {
+      showAlert('ข้อมูลไม่ถูกต้อง', 'PromptPay ID ต้องเป็นตัวเลข 10 หลักเท่านั้น');
+      return;
+    }
+
     if (settings.rate_per_sqm !== originalRate) {
       setShowRateModal(true);
     } else {
@@ -91,6 +115,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, darkMode = false })
         },
         body: JSON.stringify({
           ...settings,
+          // Force key-only mode, backend will auto-select working Slip2Go endpoint.
+          slip2go_api: '',
           update_all_payments: updateAllPayments
         }), 
       });
@@ -162,30 +188,22 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, darkMode = false })
               keyboardType="decimal-pad"
             />
 
-            <Text style={[styles.inputLabel, { color: colors.text }]}>SlipOK API URL</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
-              placeholder="https://api.slipok.com/api/..."
-              placeholderTextColor={colors.subtext}
-              value={settings.slipok_api}
-              onChangeText={(v) => {
-                const clean = v.replace(/[^a-zA-Z0-9:/.?&=_-]/g, '');
-                setSettings({ ...settings, slipok_api: clean });
-              }}
-              autoCapitalize="none"
-            />
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Slip2Go API URL</Text>
+            <View style={[styles.exampleBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+              <Text style={[styles.exampleTitle, { color: colors.text }]}>ไม่ต้องกรอก URL</Text>
+              <Text style={[styles.exampleText, { color: colors.subtext }]}>ระบบจะเลือก endpoint ที่ใช้งานได้ให้อัตโนมัติ</Text>
+              <Text style={[styles.exampleText, { color: colors.subtext }]}>ให้ใส่เฉพาะ Slip2Go API Secret ก็พอ</Text>
+            </View>
 
-            <Text style={[styles.inputLabel, { color: colors.text }]}>SlipOK API Key</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Slip2Go API Secret</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
-              placeholder="SLIPOK..."
+              placeholder="SECRET..."
               placeholderTextColor={colors.subtext}
-              value={settings.slipok_key}
-              onChangeText={(v) => {
-                const clean = v.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase();
-                setSettings({ ...settings, slipok_key: clean });
-              }}
-              autoCapitalize="characters"
+              value={settings.slip2go_secret}
+              onChangeText={(v) => setSettings({ ...settings, slip2go_secret: v })}
+              autoCapitalize="none"
+              autoCorrect={false}
             />
 
             <Text style={[styles.inputLabel, { color: colors.text }]}>PromptPay ID (เบอร์โทร)</Text>
@@ -195,26 +213,46 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, darkMode = false })
               placeholderTextColor={colors.subtext}
               value={settings.promptpay_id}
               onChangeText={(v) => {
-                const clean = v.replace(/[^0-9]/g, '').slice(0, 13);
+                const clean = v.replace(/[^0-9]/g, '').slice(0, 10);
                 setSettings({ ...settings, promptpay_id: clean });
               }}
               keyboardType="phone-pad"
-              maxLength={13}
+              maxLength={10}
             />
 
-            <Text style={[styles.inputLabel, { color: colors.text }]}>QR หมดอายุภายใน (วัน)</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>ชื่อบัญชีผู้รับ (ตรวจสลิป)</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
-              placeholder="3"
+              placeholder="เช่น นิติบุคคลหมู่บ้าน..."
               placeholderTextColor={colors.subtext}
-              value={settings.qr_expiry_days}
+              value={settings.receiver_name}
+              onChangeText={(v) => setSettings({ ...settings, receiver_name: v })}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={[styles.exampleBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+              <Text style={[styles.exampleText, { color: colors.subtext }]}>ใช้ตรวจว่าสลิปโอนไปยังบัญชีที่ถูกต้อง</Text>
+              <Text style={[styles.exampleText, { color: colors.subtext }]}>ถ้าไม่กรอก ระบบจะไม่ตรวจชื่อบัญชีผู้รับ</Text>
+            </View>
+
+            <Text style={[styles.inputLabel, { color: colors.text }]}>สร้างงวดปีถัดไปล่วงหน้า (วัน)</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
+              placeholder="0"
+              placeholderTextColor={colors.subtext}
+              value={settings.installment_rollover_before_days}
               onChangeText={(v) => {
-                const clean = v.replace(/[^0-9]/g, '');
-                setSettings({ ...settings, qr_expiry_days: clean });
+                const clean = v.replace(/[^0-9]/g, '').slice(0, 3);
+                setSettings({ ...settings, installment_rollover_before_days: clean });
               }}
               keyboardType="number-pad"
               maxLength={3}
             />
+            <View style={[styles.exampleBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+              <Text style={[styles.exampleTitle, { color: colors.text }]}>ตัวอย่างการทำงาน</Text>
+              <Text style={[styles.exampleText, { color: colors.subtext }]}>ถ้าปีล่าสุดสิ้นสุดวันที่ {formatDdMmYyyy(sampleCycleEndDate)}</Text>
+              <Text style={[styles.exampleText, { color: colors.subtext }]}>ตั้งค่าล่วงหน้า {leadDays} วัน ระบบจะสร้างงวดปีถัดไปตั้งแต่ {formatDdMmYyyy(sampleTriggerDate)}</Text>
+            </View>
 
             <TouchableOpacity
               style={[styles.saveBtn, { backgroundColor: colors.primary }, savingSettings && styles.opacityDisabled]}
@@ -354,207 +392,56 @@ const styles = StyleSheet.create({
    header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: wp('4%'),
     borderBottomWidth: 1,
-    gap: 16,
+    gap: wp('4%'),
   },
-  backBtn: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: 16,
-  },
-   inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    marginBottom: 16,
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    marginTop: 20,
-    gap: 8,
-  },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  backBtn: { padding: wp('1%') },
+  headerTitle: { fontSize: wp('5%'), fontWeight: '700' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  listContent: { padding: wp('4%') },
+   inputLabel: { fontSize: wp('3.5%'), fontWeight: '600', marginBottom: hp('0.8%') },
+  input: { borderWidth: 1, borderRadius: wp('2.5%'), padding: wp('3%'), fontSize: wp('3.7%'), marginBottom: hp('2%') },
+  exampleBox: { borderWidth: 1, borderRadius: wp('2.5%'), padding: wp('3%'), marginTop: -6, marginBottom: hp('1.5%') },
+  exampleTitle: { fontSize: wp('3.2%'), fontWeight: '700', marginBottom: hp('0.8%') },
+  exampleText: { fontSize: wp('3%'), lineHeight: hp('2.3%') },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: hp('1.7%'), borderRadius: wp('2.5%'), marginTop: hp('2.5%'), gap: wp('2%') },
+  saveBtnText: { color: '#fff', fontSize: wp('4%'), fontWeight: '600' },
   // Rate Modal Styles
-  rateModalContent: {
-    width: '85%',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-  },
-  rateModalIcon: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  rateModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 20,
-  },
-  rateModalChange: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  rateBox: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    minWidth: 80,
-  },
-  rateBoxLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  rateBoxValue: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  rateModalUnit: {
-    fontSize: 14,
-    marginBottom: 24,
-  },
-  rateModalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-    width: '100%',
-  },
-  rateModalBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 6,
-  },
-  rateModalBtnCancel: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-  },
-  rateModalBtnSave: {
-    backgroundColor: '#3B82F6',
-  },
-  rateModalBtnAll: {
-    flex: 0,
-    backgroundColor: '#10B981',
-    width: '100%',
-  },
-  rateModalBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  rateModalBtnTextWhite: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  confirmModalText: {
-    fontSize: 15,
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  confirmModalWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginBottom: 24,
-    width: '100%',
-  },
-  confirmModalWarningText: {
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
-  },
-   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  flex1: {
-    flex: 1,
-  },
-  opacityDisabled: {
-    opacity: 0.7,
-  },
-  spacer50: {
-    height: 50,
-  },
-  rateBoxDark: {
-    backgroundColor: '#374151',
-  },
-  rateBoxOld: {
-    backgroundColor: '#FEE2E2',
-  },
-  rateBoxNew: {
-    backgroundColor: '#D1FAE5',
-  },
-  colorDanger: {
-    color: '#EF4444',
-  },
-  colorSuccess: {
-    color: '#10B981',
-  },
-  bgWarningLight: {
-    backgroundColor: '#FEF3C7',
-  },
-  bgWarning: {
-    backgroundColor: '#F59E0B',
-  },
-  bgSuccessLight: {
-    backgroundColor: '#D1FAE5',
-  },
-  confirmWarningDark: {
-    backgroundColor: '#422006',
-  },
-  confirmWarningLight: {
-    backgroundColor: '#FEF3C7',
-  },
-  confirmWarningTextDark: {
-    color: '#FCD34D',
-  },
-  confirmWarningTextLight: {
-    color: '#92400E',
-  },
+  rateModalContent: { width: '85%', borderRadius: wp('5%'), padding: wp('6%'), alignItems: 'center' },
+  rateModalIcon: { width: wp('17.5%'), height: wp('17.5%'), borderRadius: wp('8.75%'), backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: hp('2%') },
+  rateModalTitle: { fontSize: wp('5%'), fontWeight: '700', marginBottom: hp('2.5%') },
+  rateModalChange: { flexDirection: 'row', alignItems: 'center', gap: wp('3%'), marginBottom: hp('1%') },
+  rateBox: { paddingHorizontal: wp('4%'), paddingVertical: hp('1.5%'), borderRadius: wp('3%'), alignItems: 'center', minWidth: 80 },
+  rateBoxLabel: { fontSize: wp('3%'), fontWeight: '600', marginBottom: hp('0.5%') },
+  rateBoxValue: { fontSize: wp('6%'), fontWeight: '700' },
+  rateModalUnit: { fontSize: wp('3.5%'), marginBottom: hp('3%') },
+  rateModalButtons: { flexDirection: 'row', gap: wp('3%'), marginBottom: hp('1.5%'), width: '100%' },
+  rateModalBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: hp('1.7%'), borderRadius: wp('3%'), gap: wp('1.5%') },
+  rateModalBtnCancel: { backgroundColor: 'transparent', borderWidth: 1 },
+  rateModalBtnSave: { backgroundColor: '#3B82F6' },
+  rateModalBtnAll: { flex: 0, backgroundColor: '#10B981', width: '100%' },
+  rateModalBtnText: { fontSize: wp('3.7%'), fontWeight: '600' },
+  rateModalBtnTextWhite: { fontSize: wp('3.7%'), fontWeight: '600', color: '#fff' },
+  confirmModalText: { fontSize: wp('3.7%'), textAlign: 'center', marginBottom: hp('2%'), lineHeight: hp('2.7%') },
+  confirmModalWarning: { flexDirection: 'row', alignItems: 'center', gap: wp('2%'), paddingHorizontal: wp('4%'), paddingVertical: hp('1.5%'), borderRadius: wp('2.5%'), marginBottom: hp('3%'), width: '100%' },
+  confirmModalWarningText: { fontSize: wp('3.2%'), fontWeight: '500', flex: 1 },
+   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: wp('6%') },
+  flex1: { flex: 1 },
+  opacityDisabled: { opacity: 0.7 },
+  spacer50: { height: hp('6.25%') },
+  rateBoxDark: { backgroundColor: '#374151' },
+  rateBoxOld: { backgroundColor: '#FEE2E2' },
+  rateBoxNew: { backgroundColor: '#D1FAE5' },
+  colorDanger: { color: '#EF4444' },
+  colorSuccess: { color: '#10B981' },
+  bgWarningLight: { backgroundColor: '#FEF3C7' },
+  bgWarning: { backgroundColor: '#F59E0B' },
+  bgSuccessLight: { backgroundColor: '#D1FAE5' },
+  confirmWarningDark: { backgroundColor: '#422006' },
+  confirmWarningLight: { backgroundColor: '#FEF3C7' },
+  confirmWarningTextDark: { color: '#FCD34D' },
+  confirmWarningTextLight: { color: '#92400E' },
 });
 
 export default SettingsPage;

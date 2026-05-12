@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, RefreshControl, ActivityIndicator, Platform
+  TextInput, RefreshControl, ActivityIndicator, Platform, Modal, Image
 } from 'react-native';
+
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrl } from '../SuperAdmin';
+import { formatThaiDateTime, toSortableMs } from '../../lib/datetime';
 
 const themeColors = {
   primary: '#4F46E5',
@@ -37,13 +39,9 @@ interface Props {
   darkMode?: boolean;
 }
 
-const formatDate = (dateString: string) => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  return d.toLocaleDateString('th-TH', {
-    year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+const toThaiDate = (input: unknown, withTime = false) => {
+  if (input === null || input === undefined || String(input).trim() === '') return '-';
+  return formatThaiDateTime(String(input), { withTime });
 };
 
 const ACTION_CONFIG: Record<string, { label: string; icon: string; color: string; bgColor: string }> = {
@@ -72,6 +70,7 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const PAGE_SIZE = 50;
 
   const colors = themeColors;
@@ -127,8 +126,8 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
       );
     }
     data.sort((a, b) => {
-      const dA = new Date(a.created_at).getTime();
-      const dB = new Date(b.created_at).getTime();
+      const dA = toSortableMs(a.created_at);
+      const dB = toSortableMs(b.created_at);
       return sortOrder === 'newest' ? dB - dA : dA - dB;
     });
     return data;
@@ -137,7 +136,30 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
   const formatVal = (key: string, val: any): string => {
     if (val === null || val === undefined || val === '') return '-';
     if (key === 'important') return val ? 'ใช่' : 'ไม่';
+    if (key === 'date') return toThaiDate(val, false);
     return String(val);
+  };
+
+  const normalizeImageUrl = (val: any): string | null => {
+    if (typeof val !== 'string') return null;
+    const raw = val.trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const base = getBaseUrl();
+    return raw.startsWith('/') ? `${base}${raw}` : `${base}/${raw}`;
+  };
+
+  const isImageField = (key: string) => key.toLowerCase().includes('image');
+
+  const renderImageLink = (val: any, label = 'ดูรูป') => {
+    const url = normalizeImageUrl(val);
+    if (!url) return <Text style={[styles.changeValue, styles.textSubtext]}>-</Text>;
+    return (
+      <TouchableOpacity onPress={() => setPreviewImageUrl(url)} style={styles.imageOpenBtn} activeOpacity={0.8}>
+        <Ionicons name="image-outline" size={13} color="#2563EB" />
+        <Text style={styles.imageOpenText}>{label}</Text>
+      </TouchableOpacity>
+    );
   };
 
   const renderChanges = (changes: Record<string, { old?: any; new?: any }> | null, action: string) => {
@@ -155,7 +177,9 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
             return (
               <View key={key} style={styles.changeRow}>
                 <Text style={[styles.changeField, styles.textSubtext]}>{FIELD_LABELS[key] || key}:</Text>
-                <Text style={[styles.changeValue, styles.textPrimary]}>{formatVal(key, newVal)}</Text>
+                {isImageField(key)
+                  ? renderImageLink(newVal)
+                  : <Text style={[styles.changeValue, styles.textPrimary]}>{formatVal(key, newVal)}</Text>}
               </View>
             );
           })}
@@ -173,7 +197,9 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
             return (
               <View key={key} style={styles.changeRow}>
                 <Text style={[styles.changeField, styles.textSubtext]}>{FIELD_LABELS[key] || key}:</Text>
-                <Text style={[styles.changeValue, styles.changeValueDelete]}>{formatVal(key, oldVal)}</Text>
+                {isImageField(key)
+                  ? renderImageLink(oldVal)
+                  : <Text style={[styles.changeValue, styles.changeValueDelete]}>{formatVal(key, oldVal)}</Text>}
               </View>
             );
           })}
@@ -191,11 +217,15 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
               <Text style={[styles.changeField, styles.textSubtext]}>{FIELD_LABELS[key] || key}</Text>
               <View style={styles.changeArrowRow}>
                 <View style={[styles.changeValueBox, styles.changeValueBoxOld]}>
-                  <Text style={[styles.changeValueSmall, styles.changeValueOldText]}>{formatVal(key, val.old)}</Text>
+                  {isImageField(key)
+                    ? renderImageLink(val.old, 'รูปเดิม')
+                    : <Text style={[styles.changeValueSmall, styles.changeValueOldText]}>{formatVal(key, val.old)}</Text>}
                 </View>
                 <Ionicons name="arrow-forward" size={14} color={colors.subtext} />
                 <View style={[styles.changeValueBox, styles.changeValueBoxNew]}>
-                  <Text style={[styles.changeValueSmall, styles.changeValueNewText]}>{formatVal(key, val.new)}</Text>
+                  {isImageField(key)
+                    ? renderImageLink(val.new, 'รูปใหม่')
+                    : <Text style={[styles.changeValueSmall, styles.changeValueNewText]}>{formatVal(key, val.new)}</Text>}
                 </View>
               </View>
             </View>
@@ -222,7 +252,7 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
             <Ionicons name={config.icon as any} size={14} color={badgeColor} />
             <Text style={[styles.actionBadgeText, { color: badgeColor }]}>{config.label}</Text>
           </View>
-          <Text style={[styles.logDate, styles.textSubtext]}>{formatDate(item.created_at)}</Text>
+          <Text style={[styles.logDate, styles.textSubtext]}>{toThaiDate(item.created_at, true)}</Text>
         </View>
 
         <View style={styles.logBody}>
@@ -288,7 +318,7 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
 
       <View style={styles.searchContainer}>
         <View style={styles.searchRow}>
-          <View style={[styles.searchInputWrapper, { flex: 1 }]}>
+          <View style={[styles.searchInputWrapper, styles.flex1]}>
             <Ionicons name="search" size={18} color={colors.subtext} />
             <TextInput
               style={[styles.searchInput, styles.textPrimary]}
@@ -364,6 +394,17 @@ const AnnouncementLogsPage: React.FC<Props> = ({ onBack }) => {
           }
         />
       )}
+
+      <Modal visible={!!previewImageUrl} transparent animationType="fade" onRequestClose={() => setPreviewImageUrl(null)}>
+        <View style={styles.previewBackdrop}>
+          <View style={styles.previewCard}>
+            <Image source={{ uri: previewImageUrl || '' }} style={styles.previewImage} resizeMode="contain" />
+            <TouchableOpacity style={styles.previewCloseBtn} onPress={() => setPreviewImageUrl(null)} activeOpacity={0.8}>
+              <Text style={styles.previewCloseText}>ปิด</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -389,6 +430,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 20, fontWeight: '700' },
+  flex1: { flex: 1 },
   textPrimary: { color: themeColors.text },
   textSubtext: { color: themeColors.subtext },
 
@@ -478,6 +520,53 @@ const styles = StyleSheet.create({
   changeValueOldText: { color: '#DC2626' },
   changeValueBoxNew: { backgroundColor: '#DCFCE7' },
   changeValueNewText: { color: '#16A34A' },
+  imageOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  imageOpenText: {
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    padding: 10,
+  },
+  previewImage: {
+    width: '100%',
+    height: 380,
+    borderRadius: 8,
+    backgroundColor: '#0B1220',
+  },
+  previewCloseBtn: {
+    marginTop: 10,
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  previewCloseText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });
 
 export default AnnouncementLogsPage;

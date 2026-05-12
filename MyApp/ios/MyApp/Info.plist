@@ -51,6 +51,10 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
+	<key>NSCameraUsageDescription</key>
+	<string>แอปต้องใช้กล้องเพื่อถ่ายรูปและอัดวิดีโอในแชท</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>แอปต้องใช้ไมโครโฟนเพื่ออัดเสียงในวิดีโอ</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>

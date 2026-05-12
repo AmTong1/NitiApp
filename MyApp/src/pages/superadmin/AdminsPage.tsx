@@ -3,9 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, Modal, TextInput
 } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrl } from '../SuperAdmin';
+import { formatThaiDateTime } from '../../lib/datetime';
 
 
 const themeColors = {
@@ -32,15 +34,7 @@ interface AdminsPageProps {
   darkMode?: boolean;
 }
 
-const formatDate = (dateString: string) => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  return d.toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-};
+const formatDate = (dateString: string) => formatThaiDateTime(dateString, { withTime: false });
 
 const AdminsPage: React.FC<AdminsPageProps> = ({ onBack }) => {
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -601,97 +595,48 @@ const styles = StyleSheet.create({
    header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: wp('4%'),
     borderBottomWidth: 1,
-    gap: 16,
+    gap: wp('4%'),
   },
-  backBtn: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 16,
-    marginTop: 12,
-  }, 
+  backBtn: { padding: wp('1%') },
+  headerTitle: { fontSize: wp('5%'), fontWeight: '700' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  listContent: { padding: wp('4%'), paddingBottom: hp('12.5%') },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: hp('12.5%') },
+  emptyText: { fontSize: wp('4%'), marginTop: hp('1.5%') },
   adminCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: wp('3%'),
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 12,
+    padding: wp('4%'),
+    marginBottom: hp('1.5%'),
   },
-  adminInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  adminInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   adminAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: wp('12%'),
+    height: wp('12%'),
+    borderRadius: wp('6%'),
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: wp('3%'),
   },
-  adminDetails: {
-    flex: 1,
-  },
-  adminName: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  adminUsername: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  adminMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  adminDate: {
-    fontSize: 11,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  editAdminBtn: {
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'transparent', // Placeholder
-  },
-  deleteAdminBtn: {
-    padding: 10,
-    borderRadius: 10,
-  },
+  adminDetails: { flex: 1 },
+  adminName: { fontSize: wp('4%'), fontWeight: '600' },
+  adminUsername: { fontSize: wp('3.2%'), marginBottom: hp('0.5%') },
+  adminMeta: { flexDirection: 'row', alignItems: 'center', gap: wp('2%') },
+  adminDate: { fontSize: wp('2.7%') },
+  actionButtons: { flexDirection: 'row', gap: wp('2%') },
+  editAdminBtn: { padding: wp('2.5%'), borderRadius: wp('2.5%'), borderWidth: 1, borderColor: 'transparent' },
+  deleteAdminBtn: { padding: wp('2.5%'), borderRadius: wp('2.5%') },
   fab: {
     position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: hp('3%'),
+    right: wp('6%'),
+    width: wp('14%'),
+    height: wp('14%'),
+    borderRadius: wp('7%'),
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -700,131 +645,40 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
-  },
-  roleBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
+  roleBadge: { paddingHorizontal: wp('2%'), paddingVertical: hp('0.25%'), borderRadius: wp('2.5%'), marginLeft: wp('2%') },
+  roleBadgeText: { color: '#fff', fontSize: wp('2.7%'), fontWeight: '600' },
   // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: wp('6%'),
   },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 16,
-    padding: 24,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    marginBottom: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  cancelBtn: {
-    borderWidth: 1,
-  },
-  cancelBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  modalContent: { width: '100%', maxWidth: 400, borderRadius: wp('4%'), padding: wp('6%') },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: wp('3%'), marginBottom: hp('3%') },
+  modalTitle: { fontSize: wp('5%'), fontWeight: '700' },
+  inputLabel: { fontSize: wp('3.5%'), fontWeight: '600', marginBottom: hp('0.8%') },
+  input: { borderWidth: 1, borderRadius: wp('2.5%'), padding: wp('3%'), fontSize: wp('3.7%'), marginBottom: hp('2%') },
+  modalButtons: { flexDirection: 'row', gap: wp('3%'), marginTop: hp('1%') },
+  modalBtn: { flex: 1, paddingVertical: hp('1.7%'), borderRadius: wp('3%'), alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: wp('1.5%') },
+  cancelBtn: { borderWidth: 1 },
+  cancelBtnText: { fontSize: wp('3.7%'), fontWeight: '600' },
   createBtn: {},
-  createBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  createBtnText: { color: '#fff', fontSize: wp('3.7%'), fontWeight: '600' },
   // Confirm Modal
-  confirmModalContent: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  confirmHeader: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  confirmIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  confirmTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  confirmMessage: {
-    fontSize: 15,
-    textAlign: 'center',
-    paddingHorizontal: 16,
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  opacityDisabled: {
-    opacity: 0.7,
-  },
-  confirmIconDanger: {
-    backgroundColor: '#FEE2E2',
-  },
-  confirmIconSuccess: {
-    backgroundColor: '#D1FAE5',
-  },
-  confirmIconInfo: {
-    backgroundColor: '#E0E7FF',
-  },
-  btnDanger: {
-    backgroundColor: '#EF4444',
-  },
-  btnPrimary: {
-    backgroundColor: '#6366F1',
-  },
+  confirmModalContent: { alignItems: 'center', paddingVertical: hp('4%') },
+  confirmHeader: { alignItems: 'center', marginBottom: hp('3%') },
+  confirmIcon: { width: wp('16%'), height: wp('16%'), borderRadius: wp('8%'), justifyContent: 'center', alignItems: 'center', marginBottom: hp('2%') },
+  confirmTitle: { fontSize: wp('5%'), fontWeight: '700', marginBottom: hp('1%'), textAlign: 'center' },
+  confirmMessage: { fontSize: wp('3.7%'), textAlign: 'center', paddingHorizontal: wp('4%') },
+  confirmButtons: { flexDirection: 'row', gap: wp('3%') },
+  opacityDisabled: { opacity: 0.7 },
+  confirmIconDanger: { backgroundColor: '#FEE2E2' },
+  confirmIconSuccess: { backgroundColor: '#DCFCE7' },
+  confirmIconInfo: { backgroundColor: '#EEF2FF' },
+  btnDanger: { backgroundColor: '#EF4444' },
+  btnPrimary: { backgroundColor: '#4F46E5' },
 });
 
 export default AdminsPage;

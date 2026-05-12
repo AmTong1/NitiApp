@@ -2,24 +2,22 @@ const { pool } = require('../src/db/pool');
 
 async function check() {
   try {
-    const client = await pool.raw().connect();
+    const client = await pool.getClient();
     console.log('--- DEBUG QUERY ---');
     
-    // Check specifically for waiting_approval with cast
-    const res = await client.query(`
+    const [res] = await client.query(`
       SELECT id, status, house_number 
       FROM payment_installments 
-      WHERE status::text = 'waiting_approval'
+      WHERE status = 'waiting_approval'
     `);
-    console.log('Waiting Approval Rows:', JSON.stringify(res.rows));
+    console.log('Waiting Approval Rows:', JSON.stringify(res));
 
-    // Check distribution
-    const dist = await client.query(`
+    const [dist] = await client.query(`
       SELECT status, COUNT(*) as cnt 
       FROM payment_installments 
       GROUP BY status
     `);
-    console.log('Status Distribution:', JSON.stringify(dist.rows));
+    console.log('Status Distribution:', JSON.stringify(dist));
 
     client.release();
   } catch (err) {

@@ -1,25 +1,69 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import type { Announcement } from '../types';
 import MenuRow from '../components/MenuRow';
 import AnnouncementList from '../components/AnnouncementList';
+import { useI18n } from '../i18n';
 
 type HomeProps = {
   darkMode: boolean;
   announcements: Announcement[];
   goNotification: () => void;
-  goQrcode?: () => void;
+  goPayment?: () => void;
+  goCall?: () => void;
+  goRepair?: () => void;
+  goFinancial?: () => void;
+  totalOverdueAmount?: number | null;
+  totalOverdueLoading?: boolean;
+  onRefreshOverdue?: () => Promise<void> | void;
+  onRefreshAnnouncements?: () => Promise<void> | void;
+  role?: string;
 };
 
 const Home: React.FC<HomeProps> = ({
   darkMode,
   announcements,
   goNotification,
-  goQrcode,
+  goPayment,
+  goCall,
+  goRepair,
+  goFinancial,
+  totalOverdueAmount,
+  totalOverdueLoading,
+  onRefreshOverdue,
+  onRefreshAnnouncements,
+  role,
 }) => {
-  const handleCashPress = () => {
-    if (goQrcode) goQrcode();
-  };
+  const { t } = useI18n();
+  const [refreshing, setRefreshing] = useState(false);
+  const handleCashPress = () => goPayment?.();
+  const handleCallPress = () => goCall?.();
+  const handleConstructPress = () => goRepair?.();
+  const handleFinancialPress = () => goFinancial?.();
+
+  const amountText = (() => {
+    if (totalOverdueLoading) return '...';
+    if (typeof totalOverdueAmount !== 'number' || Number.isNaN(totalOverdueAmount)) return '-';
+    return `${Number(totalOverdueAmount).toLocaleString('th-TH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} ${t('phBaht')}`;
+  })();
+
+  const runPullRefresh = useCallback(async () => {
+    if (refreshing) return;
+
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        Promise.resolve(onRefreshOverdue?.()),
+        Promise.resolve(onRefreshAnnouncements?.()),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, onRefreshOverdue, onRefreshAnnouncements]);
 
   const bg = darkMode ? '#FFFFFFFF' : '#FFFFFFFF';
   const textPrimary = darkMode ? '#E6E8EC' : '#1F2937';
@@ -31,25 +75,38 @@ const Home: React.FC<HomeProps> = ({
       <ScrollView
         contentContainerStyle={styles.scrollBody}
         showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        overScrollMode="always"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={runPullRefresh}
+            tintColor={accent}
+            colors={[accent]}
+            progressViewOffset={Math.round(hp('1.2%'))}
+          />
+        }
       >
-        {/* โซนเนื้อหา กำหนดความกว้างสูงสุดและจัดกลาง */}
         <View style={styles.centerWrap}>
           {/* แถวเมนูด้านบน */}
-          <View style={[styles.menuWrap, styles.shadowSm, { backgroundColor: cardBg }]}>
+          <View style={[styles.menuWrap, styles.shadowSm, { backgroundColor: cardBg }]}> 
             <MenuRow
               onCashPress={handleCashPress}
-              onCallPress={() => console.log('Call pressed')}
-              onConstructPress={() => console.log('Construct pressed')}
+              onCallPress={handleCallPress}
+              onConstructPress={handleConstructPress}
+              onFinancialPress={handleFinancialPress}
             />
           </View>
 
-          {/* กล่องค้างชำระแบบพิลล์ */}
-          <View style={[styles.infoBox, styles.shadowSm, { backgroundColor: cardBg }]}>
-            <Text style={[styles.infoText, { color: textPrimary }]}>
-              จำนวนเงินทั้งหมดที่ค้างชำระ:{' '}
-              <Text style={[styles.infoAmount, { color: accent }]}>XXXX</Text>
-            </Text>
-          </View>
+          {/* กล่องค้างชำระแบบพิลล์ (ซ่อนสำหรับ Admin / SuperAdmin) */}
+          {role !== 'admin' && role !== 'superadmin' && (
+            <View style={[styles.infoBox, styles.shadowSm, { backgroundColor: cardBg }]}> 
+              <Text style={[styles.infoText, { color: textPrimary }]}> 
+                {t('payTotalOverdue')}:{' '}
+                <Text style={[styles.infoAmount, { color: accent }]}>{amountText}</Text>
+              </Text>
+            </View>
+          )}
 
           {/* การ์ดประกาศข่าวสาร */}
           <AnnouncementList
@@ -68,40 +125,41 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollBody: {
-    paddingTop: 10,
-    paddingBottom: 20,
+    flexGrow: 1,
+    paddingTop: hp('1.3%'),
+    paddingBottom: hp('2.5%'),
     alignItems: 'center',
   },
   centerWrap: {
     width: '100%',
-    paddingHorizontal: 10,
-    gap: 14,
+    paddingHorizontal: wp('2.5%'),
+    gap: hp('1.7%'),
   },
 
   menuWrap: {
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    borderRadius: wp('5%'),
+    paddingVertical: hp('1%'),
+    paddingHorizontal: wp('2%'),
   },
 
   infoBox: {
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    borderRadius: wp('4%'),
+    paddingVertical: hp('1.7%'),
+    paddingHorizontal: wp('4%'),
   },
   infoText: {
-    fontSize: 16,
+    fontSize: wp('4%'),
     fontWeight: '500',
     textAlign: 'center',
   },
   infoAmount: {
-    fontSize: 18,
+    fontSize: wp('4.5%'),
     fontWeight: '800',
   },
 
   card: {
-    borderRadius: 18,
-    padding: 12,
+    borderRadius: wp('4.5%'),
+    padding: wp('3%'),
   },
 
   // เงา (iOS + Android)

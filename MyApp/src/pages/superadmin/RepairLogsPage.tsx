@@ -3,9 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator, Image, Modal
 } from 'react-native';
+
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrl } from '../SuperAdmin';
+import { formatThaiDateTime, toSortableMs } from '../../lib/datetime';
 
 const themeColors = {
   primary: '#4F46E5',
@@ -55,18 +57,6 @@ interface RepairLogsPageProps {
   onBack: () => void;
   darkMode?: boolean;
 }
-
-const formatDate = (dateString?: string) => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  return d.toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 type StatusFilter = 'all' | 'pending' | 'in_progress' | 'done';
 
@@ -156,8 +146,8 @@ const RepairLogsPage: React.FC<RepairLogsPageProps> = ({ onBack }) => {
       );
     }
     return [...result].sort((a, b) => {
-      const da = new Date(a.created_at).getTime();
-      const db = new Date(b.created_at).getTime();
+      const da = toSortableMs(a.created_at);
+      const db = toSortableMs(b.created_at);
       return sortNewest ? db - da : da - db;
     });
   }, [logs, searchText, sortNewest]);
@@ -228,14 +218,14 @@ const RepairLogsPage: React.FC<RepairLogsPageProps> = ({ onBack }) => {
               {log.performed_by_role && (
                 <View style={[
                   styles.miniRoleBadge,
-                  { backgroundColor: log.performed_by_role === 'superadmin' ? '#F59E0B' : '#6366F1' }
+                  log.performed_by_role === 'superadmin' ? styles.miniRoleBadgeWarning : styles.miniRoleBadgePrimary
                 ]}>
                   <Text style={styles.miniRoleText}>{log.performed_by_role}</Text>
                 </View>
               )}
             </View>
             <Text style={[styles.editLogTime, { color: colors.subtext }]}>
-              {formatDate(log.created_at)}
+              {formatThaiDateTime(log.created_at)}
             </Text>
           </View>
 
@@ -249,14 +239,14 @@ const RepairLogsPage: React.FC<RepairLogsPageProps> = ({ onBack }) => {
               <View key={key} style={styles.editChangeRow}>
                 <Text style={[styles.editChangeLabel, { color: colors.subtext }]}>{label}</Text>
                 <View style={styles.editChangeValues}>
-                  <View style={[styles.editOldVal, { backgroundColor: '#FEE2E2' }]}>
-                    <Text style={{ color: '#DC2626', fontSize: 12 }} numberOfLines={1}>
+                  <View style={[styles.editOldVal, styles.editOldValBg]}>
+                    <Text style={styles.editOldValText} numberOfLines={1}>
                       {oldDisplay != null ? String(oldDisplay) : '-'}
                     </Text>
                   </View>
                   <Ionicons name="arrow-forward" size={12} color={colors.subtext} />
-                  <View style={[styles.editNewVal, { backgroundColor: '#DCFCE7' }]}>
-                    <Text style={{ color: '#16A34A', fontSize: 12 }} numberOfLines={1}>
+                  <View style={[styles.editNewVal, styles.editNewValBg]}>
+                    <Text style={styles.editNewValText} numberOfLines={1}>
                       {newDisplay != null ? String(newDisplay) : '-'}
                     </Text>
                   </View>
@@ -323,7 +313,7 @@ const RepairLogsPage: React.FC<RepairLogsPageProps> = ({ onBack }) => {
           <Ionicons name="calendar-outline" size={14} color={colors.subtext} />
           <Text style={[styles.infoLabel, { color: colors.subtext }]}>วันที่แจ้ง: </Text>
           <Text style={[styles.infoValue, { color: colors.text }]}>
-            {formatDate(item.created_at)}
+            {formatThaiDateTime(item.created_at)}
           </Text>
         </View>
 
@@ -332,7 +322,7 @@ const RepairLogsPage: React.FC<RepairLogsPageProps> = ({ onBack }) => {
             <Ionicons name="checkmark-done-outline" size={14} color={colors.success} />
             <Text style={[styles.infoLabel, { color: colors.subtext }]}>เสร็จเมื่อ: </Text>
             <Text style={[styles.infoValue, { color: colors.success }]}>
-              {formatDate(item.done_at)}
+              {formatThaiDateTime(item.done_at)}
             </Text>
           </View>
         )}
@@ -389,7 +379,7 @@ const RepairLogsPage: React.FC<RepairLogsPageProps> = ({ onBack }) => {
       {isExpanded && (
         <View style={[styles.editHistorySection, { borderTopColor: colors.border }]}>
           {isLoadingThis ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ paddingVertical: 16 }} />
+            <ActivityIndicator size="small" color={colors.primary} style={styles.loadingIndicatorInline} />
           ) : itemEditLogs.length === 0 ? (
             <View style={styles.noEditLogs}>
               <Ionicons name="checkmark-circle-outline" size={20} color={colors.subtext} />
@@ -814,6 +804,12 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: 8,
   },
+  miniRoleBadgeWarning: {
+    backgroundColor: '#F59E0B',
+  },
+  miniRoleBadgePrimary: {
+    backgroundColor: '#6366F1',
+  },
   miniRoleText: {
     color: '#fff',
     fontSize: 10,
@@ -843,11 +839,28 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     maxWidth: '40%',
   },
+  editOldValBg: {
+    backgroundColor: '#FEE2E2',
+  },
+  editOldValText: {
+    color: '#DC2626',
+    fontSize: 12,
+  },
   editNewVal: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     maxWidth: '40%',
+  },
+  editNewValBg: {
+    backgroundColor: '#DCFCE7',
+  },
+  editNewValText: {
+    color: '#16A34A',
+    fontSize: 12,
+  },
+  loadingIndicatorInline: {
+    paddingVertical: 16,
   },
 });
 

@@ -42,7 +42,7 @@ function registerAuthRoutes(app) {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
     const hash = await bcrypt.hash(password, 10);
-    await pool.query('INSERT INTO accounts (username, password_hash) VALUES ($1, $2)', [username, hash]);
+    await pool.query('INSERT INTO accounts (username, password_hash) VALUES (?, ?)', [username, hash]);
     res.json({ message: 'User registered' });
   });
 
@@ -52,7 +52,7 @@ function registerAuthRoutes(app) {
       if (!username || !password) {
         return res.status(400).json({ error: 'username and password are required' });
       }
-      const [rows] = await pool.query('SELECT * FROM accounts WHERE username = $1', [username]);
+      const [rows] = await pool.query('SELECT * FROM accounts WHERE username = ?', [username]);
       const acc = rows[0];
       if (!acc) return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
       const ok = await bcrypt.compare(password, acc.password_hash);
@@ -76,14 +76,14 @@ function registerAuthRoutes(app) {
     try {
       const { id } = req.user;
       const [rows] = await pool.query(
-        'SELECT id, username, full_name, role, created_at FROM accounts WHERE id = $1',
+        'SELECT id, username, full_name, role, created_at FROM accounts WHERE id = ?',
         [id]
       );
       const acc = rows[0] || null;
       if (acc) {
         // เพิ่ม house_number และ ชื่อจาก residents table
         const [resRows] = await pool.query(
-          'SELECT house_number, title, first_name, last_name, phone FROM residents WHERE account_id = $1 LIMIT 1',
+          'SELECT house_number, title, first_name, last_name, phone FROM residents WHERE account_id = ? LIMIT 1',
           [id]
         );
         const resident = resRows[0];
@@ -130,25 +130,25 @@ function registerAuthRoutes(app) {
       const { title, first_name, last_name, phone } = req.body || {};
       
       // Update residents (title, first_name, last_name, phone)
-      const [resRows] = await pool.query('SELECT id FROM residents WHERE account_id = $1 LIMIT 1', [id]);
+      const [resRows] = await pool.query('SELECT id FROM residents WHERE account_id = ? LIMIT 1', [id]);
       const resident = resRows[0];
       
       if (resident) {
         // อัพเดท title, first_name, last_name ถ้ามีส่งมา
         if (title !== undefined || first_name !== undefined || last_name !== undefined) {
           await pool.query(
-            'UPDATE residents SET title = COALESCE($1, title), first_name = COALESCE($2, first_name), last_name = COALESCE($3, last_name), updated_at = CURRENT_TIMESTAMP WHERE id = $4', 
+            'UPDATE residents SET title = COALESCE(?, title), first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?', 
             [title || null, first_name || null, last_name || null, resident.id]
           );
           
           // อัพเดท accounts.full_name ด้วย
           const fullName = [title, first_name, last_name].filter(Boolean).join(' ') || null;
-          await pool.query('UPDATE accounts SET full_name = $1 WHERE id = $2', [fullName, id]);
+          await pool.query('UPDATE accounts SET full_name = ? WHERE id = ?', [fullName, id]);
         }
         
         if (phone !== undefined) {
           await pool.query(
-            'UPDATE residents SET phone = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            'UPDATE residents SET phone = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
             [phone || null, resident.id]
           );
         }
@@ -156,13 +156,13 @@ function registerAuthRoutes(app) {
       
       // Return updated data
       const [rows] = await pool.query(
-        'SELECT id, username, full_name, role, created_at FROM accounts WHERE id = $1',
+        'SELECT id, username, full_name, role, created_at FROM accounts WHERE id = ?',
         [id]
       );
       const acc = rows[0] || null;
       if (acc) {
         const [resData] = await pool.query(
-          'SELECT house_number, title, first_name, last_name, phone FROM residents WHERE account_id = $1 LIMIT 1',
+          'SELECT house_number, title, first_name, last_name, phone FROM residents WHERE account_id = ? LIMIT 1',
           [id]
         );
         const rd = resData[0];
@@ -195,7 +195,7 @@ function registerAuthRoutes(app) {
       if (String(new_password).length < 6) {
         return res.status(400).json({ error: 'PASSWORD_TOO_SHORT' });
       }
-      const [rows] = await pool.query('SELECT password_hash FROM accounts WHERE id = $1', [id]);
+      const [rows] = await pool.query('SELECT password_hash FROM accounts WHERE id = ?', [id]);
       const acc = rows[0];
       if (!acc) return res.status(404).json({ error: 'NOT_FOUND' });
       if (current_password) {
@@ -203,7 +203,7 @@ function registerAuthRoutes(app) {
         if (!ok) return res.status(401).json({ error: 'INVALID_CURRENT_PASSWORD' });
       }
       const newHash = await bcrypt.hash(String(new_password), 10);
-      await pool.query('UPDATE accounts SET password_hash = $1 WHERE id = $2', [newHash, id]);
+      await pool.query('UPDATE accounts SET password_hash = ? WHERE id = ?', [newHash, id]);
       return res.json({ ok: true });
     } catch (e) {
       console.error('Change password error:', e);
@@ -232,18 +232,19 @@ function registerAuthRoutes(app) {
       }
 
       // Check if username already exists
-      const [existing] = await pool.query('SELECT id FROM accounts WHERE username = $1', [username]);
+      const [existing] = await pool.query('SELECT id FROM accounts WHERE username = ?', [username]);
       if (existing.length > 0) {
         return res.status(409).json({ error: 'USERNAME_EXISTS' });
       }
 
       const hash = await bcrypt.hash(password, 10);
       const [result] = await pool.query(
-        'INSERT INTO accounts (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, full_name, role, created_at',
+        'INSERT INTO accounts (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)',
         [username, hash, full_name || null, 'admin']
       );
+      const [newAdmin] = await pool.query('SELECT id, username, full_name, role, created_at FROM accounts WHERE id = ?', [result.insertId]);
 
-      res.status(201).json({ ok: true, admin: result[0] });
+      res.status(201).json({ ok: true, admin: newAdmin[0] });
     } catch (e) {
       console.error('Create admin error:', e);
       res.status(500).json({ error: 'SERVER_ERROR' });
@@ -283,7 +284,7 @@ function registerAuthRoutes(app) {
       }
 
       // Check if target is superadmin (cannot delete superadmin)
-      const [target] = await pool.query('SELECT role FROM accounts WHERE id = $1', [adminId]);
+      const [target] = await pool.query('SELECT role FROM accounts WHERE id = ?', [adminId]);
       if (!target[0]) {
         return res.status(404).json({ error: 'NOT_FOUND' });
       }
@@ -291,7 +292,7 @@ function registerAuthRoutes(app) {
         return res.status(403).json({ error: 'CANNOT_DELETE_SUPERADMIN' });
       }
 
-      await pool.query('DELETE FROM accounts WHERE id = $1', [adminId]);
+      await pool.query('DELETE FROM accounts WHERE id = ?', [adminId]);
       res.json({ ok: true });
     } catch (e) {
       console.error('Delete admin error:', e);
@@ -309,7 +310,7 @@ function registerAuthRoutes(app) {
       const { full_name, password } = req.body || {};
 
       // Check if target exists
-      const [target] = await pool.query('SELECT role FROM accounts WHERE id = $1', [adminId]);
+      const [target] = await pool.query('SELECT role FROM accounts WHERE id = ?', [adminId]);
       if (!target[0]) {
         return res.status(404).json({ error: 'NOT_FOUND' });
       }
@@ -321,17 +322,17 @@ function registerAuthRoutes(app) {
 
       // Update full_name
       if (full_name !== undefined) {
-         await pool.query('UPDATE accounts SET full_name = $1 WHERE id = $2', [full_name, adminId]);
+         await pool.query('UPDATE accounts SET full_name = ? WHERE id = ?', [full_name, adminId]);
       }
 
       // Update password if provided
       if (password && String(password).length >= 6) {
         const hash = await bcrypt.hash(String(password), 10);
-        await pool.query('UPDATE accounts SET password_hash = $1 WHERE id = $2', [hash, adminId]);
+        await pool.query('UPDATE accounts SET password_hash = ? WHERE id = ?', [hash, adminId]);
       }
 
       // Return updated info
-      const [updated] = await pool.query('SELECT id, username, full_name, role, created_at FROM accounts WHERE id = $1', [adminId]);
+      const [updated] = await pool.query('SELECT id, username, full_name, role, created_at FROM accounts WHERE id = ?', [adminId]);
       res.json({ ok: true, admin: updated[0] });
 
     } catch (e) {

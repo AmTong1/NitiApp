@@ -10,10 +10,9 @@ function registerAdminRoutes(app) {
         return res.status(400).json({ message: 'ต้องมี userId และ amount' });
       }
       const a = Number(amount);
-      // PostgreSQL: ON CONFLICT instead of ON DUPLICATE KEY
       await pool.query(
-        `INSERT INTO users (id, amount) VALUES ($1, $2)
-         ON CONFLICT (id) DO UPDATE SET amount = EXCLUDED.amount, updated_at = CURRENT_TIMESTAMP`,
+        `INSERT INTO users (id, amount) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = CURRENT_TIMESTAMP`,
         [userId, a]
       );
       qrCache.delete(userId);
@@ -30,13 +29,12 @@ function registerAdminRoutes(app) {
       const { amount } = req.body || {};
       if (amount === undefined) return res.status(400).json({ message: 'ต้องมี amount' });
       const a = Number(amount);
-      const [result] = await pool.query('UPDATE users SET amount = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [a, userId]);
-      // PostgreSQL: result is actually the rows, check length for affected
-      if (!result || result.length === 0) {
-        // Try to check if row exists first - if not, insert
-        const [existing] = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+      const [result] = await pool.query('UPDATE users SET amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [a, userId]);
+      if (!result || Number(result.affectedRows || 0) === 0) {
+        // If no row was updated, create one.
+        const [existing] = await pool.query('SELECT id FROM users WHERE id = ?', [userId]);
         if (!existing || existing.length === 0) {
-          await pool.query('INSERT INTO users (id, amount) VALUES ($1, $2)', [userId, a]);
+          await pool.query('INSERT INTO users (id, amount) VALUES (?, ?)', [userId, a]);
         }
       }
       qrCache.delete(userId);
@@ -54,13 +52,12 @@ function registerAdminRoutes(app) {
       if (delta === undefined) return res.status(400).json({ message: 'ต้องมี delta' });
       const d = Number(delta);
 
-      // PostgreSQL: INSERT ... ON CONFLICT DO NOTHING instead of INSERT IGNORE
-      await pool.query('INSERT INTO users (id, amount) VALUES ($1, 0.00) ON CONFLICT (id) DO NOTHING', [userId]);
-      await pool.query('UPDATE users SET amount = amount + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [d, userId]);
+      await pool.query('INSERT IGNORE INTO users (id, amount) VALUES (?, 0.00)', [userId]);
+      await pool.query('UPDATE users SET amount = amount + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [d, userId]);
 
       qrCache.delete(userId);
 
-      const [rows] = await pool.query('SELECT amount FROM users WHERE id = $1', [userId]);
+      const [rows] = await pool.query('SELECT amount FROM users WHERE id = ?', [userId]);
       res.json({ message: 'เพิ่มเงินสำเร็จ', userId, amount: Number(rows[0].amount) });
     } catch (e) {
       console.error(e);
@@ -71,7 +68,7 @@ function registerAdminRoutes(app) {
   app.get('/admin/users/:userId', adminAuth, async (req, res) => {
     try {
       const { userId } = req.params;
-      const [rows] = await pool.query('SELECT id, amount, updated_at FROM users WHERE id = $1', [userId]);
+      const [rows] = await pool.query('SELECT id, amount, updated_at FROM users WHERE id = ?', [userId]);
       if (rows.length === 0) return res.status(404).json({ message: 'ไม่พบผู้ใช้' });
       res.json(rows[0]);
     } catch (e) {

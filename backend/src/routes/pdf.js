@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const puppeteer = require('puppeteer');
 const Handlebars = require('handlebars');
-const { HEADLESS_MODE, HOST, PORT } = require('../config/env');
+const { HEADLESS_MODE, HOST, PORT, PUPPETEER_EXECUTABLE_PATH } = require('../config/env');
 const { PDF_DIR, ROOT_DIR } = require('../config/paths');
 
 function registerPdfRoutes(app) {
@@ -12,7 +12,13 @@ function registerPdfRoutes(app) {
       const templateHtml = await fs.readFile(path.join(ROOT_DIR, 'receipt-template.html'), 'utf8');
       const html = Handlebars.compile(templateHtml)(data);
 
-      const browser = await puppeteer.launch({ headless: HEADLESS_MODE });
+      const launchOptions = { headless: HEADLESS_MODE };
+      if (PUPPETEER_EXECUTABLE_PATH) {
+        launchOptions.executablePath = PUPPETEER_EXECUTABLE_PATH;
+        launchOptions.args = ['--no-sandbox', '--disable-setuid-sandbox'];
+      }
+
+      const browser = await puppeteer.launch(launchOptions);
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'networkidle0' });
 

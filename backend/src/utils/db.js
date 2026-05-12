@@ -12,10 +12,10 @@ async function hasDb() {
 
 async function tableExists(name) {
   try {
-    // PostgreSQL: use information_schema with current_database() and current_schema()
+    // MySQL: use information_schema.tables with DATABASE()
     const [rows] = await pool.query(
       `SELECT 1 FROM information_schema.tables 
-       WHERE table_name = $1 AND table_catalog = current_database()`,
+       WHERE table_name = ? AND table_schema = DATABASE()`,
       [name]
     );
     return rows.length > 0;
@@ -29,13 +29,13 @@ async function columnExists(table, column) {
   const key = `${table}.${column}`;
   if (columnCache.has(key)) return columnCache.get(key);
   try {
-    // PostgreSQL: use information_schema with current_database()
+    // MySQL: use information_schema.columns with DATABASE()
     const [rows] = await pool.query(
       `SELECT 1
          FROM information_schema.columns
-        WHERE table_catalog = current_database()
-          AND table_name = $1
-          AND column_name = $2
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
         LIMIT 1`,
       [table, column]
     );
@@ -48,4 +48,21 @@ async function columnExists(table, column) {
   }
 }
 
-module.exports = { hasDb, tableExists, columnExists };
+async function indexExists(table, indexName) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT 1
+         FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND index_name = ?
+        LIMIT 1`,
+      [table, indexName]
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { hasDb, tableExists, columnExists, indexExists };

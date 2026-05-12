@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Platform,
   ActivityIndicator, KeyboardAvoidingView, Modal, TouchableWithoutFeedback, Keyboard, ScrollView,
-  Linking,
+  Linking, AppState,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import { BASE_HOST, BASE_PORT } from './config';             // FIX import
+import { BASE_HOST } from './config';             // FIX import
 
 type Resident = {
   id: number;
@@ -19,8 +19,8 @@ type Resident = {
   household_count: number;
   car_count: number;
   area_sq_m?: number | null;
-  pay_months?: number | null; // ✅ จำนวนเดือนที่ชำระ
-  created_at?: string | null;  // ✅ สำหรับคำนวณนับจากวันสร้าง (ถ้ามีจาก backend)
+  pay_months?: number | null; // โ… เธเธณเธเธงเธเน€เธ”เธทเธญเธเธ—ี่ชำระ
+  created_at?: string | null;  // โ… เธชเธณเธซเธฃเธฑเธเธเธณเธเธงเธ“นับจากวันสร้าง (เธ–้ามีจาก backend)
   total_amount?: number | null;
 };
 
@@ -29,13 +29,10 @@ type PaymentSummary = {
   total_amount: number | null;
   amount_per_month: number | null;
 };
-
-const ANDROID_HOST = BASE_HOST;
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 } 
-// แนบ token อัตโนมัติ และกันการ parse เมื่อไม่ได้รับ JSON
+// แนบ token เธญเธฑเธ•เนเธเธกเธฑเธ•เธด และกันการ parse เน€เธกเธทเนเธญเนเธกเนเนเธ”้รับ JSON
 async function apiFetchJson(url: string, init: RequestInit = {}) {
   const token = await AsyncStorage.getItem('token');
   const headers: any = {
@@ -43,7 +40,7 @@ async function apiFetchJson(url: string, init: RequestInit = {}) {
     ...(init.headers || {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
-  // ใส่ Content-Type ให้อัตโนมัติเมื่อมี body
+  // ใส่ Content-Type เนเธซเนเธญเธฑเธ•เนเธเธกเธฑเธ•เธดเน€มื่อมี body
   if ((init as any).body && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
@@ -51,7 +48,7 @@ async function apiFetchJson(url: string, init: RequestInit = {}) {
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('application/json')) {
     const text = await res.text();
-    throw new Error(`Unexpected response (${res.status}): ${text.slice(0, 120)}…`);
+    throw new Error(`Unexpected response (${res.status}): ${text.slice(0, 120)}โ€ฆ`);
   }
   const json = await res.json();
   return { res, json };
@@ -92,9 +89,9 @@ const ResidentForm: React.FC<{
   const [area, setArea] = useState(initial?.area_sq_m != null ? String(initial.area_sq_m) : '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [payMonths, setPayMonths] = useState(initial?.pay_months != null ? String(initial.pay_months) : ''); // ✅ dropdown
+  const [payMonths, setPayMonths] = useState(initial?.pay_months != null ? String(initial.pay_months) : ''); // โ… dropdown
   const [totalAmount, setTotalAmount] = useState(initial?.total_amount != null ? String(initial.total_amount) : '');
-  // เพิ่ม state สำหรับ error ของเบอร์โทร
+  // เน€พิ่ม state สำหรับ error เธเธญเธเน€เธเธญเธฃเนเนเธ—เธฃ
   const [phoneError, setPhoneError] = useState(false);
   const [houseError, setHouseError] = useState(false);
   const [titleError, setTitleError] = useState(false);
@@ -147,7 +144,7 @@ const ResidentForm: React.FC<{
   const TITLE_OPTIONS = ['นาย', 'นาง', 'นางสาว', 'Mr.', 'Mrs.', 'Ms.', 'Miss', 'Dr.', 'ไม่ระบุ'];
   const [titleOpen, setTitleOpen] = useState(false);
 
- // วันเริ่มนับ: ใช้วันสร้างถ้ามี (โหมดแก้ไข), ไม่งั้นใช้วันนี้
+ // เธงเธฑเธเน€ริ่มนับ: เนเธเนเธงเธฑเธเธชเธฃเนเธฒเธเธ–้ามี (เนเธซเธกเธ”แก้ไข), ไม่งั้นใช้วันนี้
  const startDate = useMemo(() => {
    if (mode === 'edit' && initial?.created_at) {
      const d = new Date(initial.created_at);
@@ -156,12 +153,12 @@ const ResidentForm: React.FC<{
    return new Date();
  }, [mode, initial]);
 
- // helper เพิ่มเดือนแบบปลอดภัย
+ // helper เน€เธเธดเนเธกเน€เธ”เธทเธญเธเนเธเธเธเธฅเธญเธ”เธ เธฑเธข
  const addMonths = (date: Date, months: number) => {
    const d = new Date(date.getTime());
    const day = d.getDate();
    d.setMonth(d.getMonth() + months);
-   // ถ้าเดือนปลายทางวันหาย (ปลายเดือน) ให้ถอยไปวันสุดท้ายของเดือน
+   // เธ–เนเธฒเน€เธ”เธทเธญเธเธเธฅเธฒเธขเธ—างวันหาย (เธเธฅเธฒเธขเดือน) เนเธซเนเธ–เธญเธขเนเธเธงเธฑเธเธชเธธเธ”เธ—เนเธฒเธขเธเธญเธเดือน
    if (d.getDate() < day) d.setDate(0);
    return d;
  };
@@ -181,7 +178,7 @@ const ResidentForm: React.FC<{
    return Number.isFinite(n) ? n : null;
  }, [totalAmount]);
 
- // ตารางชำระภายใน 1 ปี ถัดจากวันเริ่ม
+ // เธ•เธฒเธฃเธฒเธเธเธณเธฃเธฐเธ ายใน 1 ปี เธ–เธฑเธ”เธเธฒเธเธงเธฑเธเน€ริ่ม
  const schedule = useMemo(() => {
     const pm = Number(payMonths || 0);
     if (!Number.isInteger(pm) || !allowedMonths.includes(pm)) return [];
@@ -194,7 +191,7 @@ const ResidentForm: React.FC<{
     return out;
   }, [payMonths, startDate, allowedMonths, fmtDate]);
 
- // งวดละ = ยอดต่อเดือนจาก payments × จำนวนเดือนที่เลือก
+ // เธเธงเธ”เธฅเธฐ = เธขเธญเธ”เธ•เนเธญเดือนจาก payments ร— เธเธณเธเธงเธเน€เธ”เธทเธญเธเธ—เธตเนเน€ลือก
  const pmNumber = useMemo(() => {
    const n = Number(payMonths || 0);
    return Number.isInteger(n) ? n : 0;
@@ -206,7 +203,7 @@ const ResidentForm: React.FC<{
    return paymentSummary.amount_per_month * pmNumber;
  }, [paymentSummary, pmNumber, allowedMonths]);
 
- // fallback: ใช้ยอดรวม ÷ จำนวนงวด (ได้ค่าเดียวกันถ้ายอดรวมเป็นทั้งปี)
+ // fallback: เนเธเนเธขเธญเธ”เธฃเธงเธก รท เธเธณเธเธงเธเธเธงเธ” (เนเธ”เนเธเนเธฒเน€เธ”เธตเธขเธงเธเธฑเธเธ–เนเธฒเธขเธญเธ”เธฃเธงเธกเน€เธเนเธเธ—ั้งปี)
  const perInstallmentFallback = useMemo(() => {
    return schedule.length && totalAmountNumber != null
      ? totalAmountNumber / schedule.length
@@ -232,8 +229,8 @@ const ResidentForm: React.FC<{
     setArea(initial?.area_sq_m != null ? String(initial.area_sq_m) : '');
     setPayMonths(initial?.pay_months != null ? String(initial.pay_months) : '');
     setTotalAmount(initial?.total_amount != null ? String(initial.total_amount) : '');
-    setUsername('');                 // reset เพิ่ม
-    setPassword('');                 // reset เพิ่ม
+    setUsername('');                 // reset เน€พิ่ม
+    setPassword('');                 // reset เน€พิ่ม
     setMonthsOpen(false);            // กัน dropdown ค้าง
     setTitleOpen(false);
     setShowAccountStep(false);
@@ -256,7 +253,7 @@ const ResidentForm: React.FC<{
     setTotalAmountError(false);
   }, [initial, visible]);
 
-  // ดึงข้อมูลล่าสุดจากตาราง payments ตามบ้านเลขที่ (โหมดแก้ไข)
+  // เธ”เธถเธเธเนเธญเธกเธนเธฅเธฅเนเธฒเธชเธธเธ”เธเธฒเธเธ•าราง payments เธ•เธฒเธกเธเนเธฒเธเน€เธฅเธเธ—ี่ (เนเธซเธกเธ”แก้ไข)
   useEffect(() => {
     let alive = true;
     const run = async () => {
@@ -266,7 +263,7 @@ const ResidentForm: React.FC<{
       }
       try {
         setPaymentLoading(true);
-        // ปรับ endpoint ให้ตรงกับฝั่ง backend ของคุณ
+        // ปรับ endpoint เนเธซเนเธ•รงกับฝั่ง backend เธเธญเธเธเธธเธ“
         const { res, json } = await apiFetchJson(
           `${getBaseUrl()}/payments/latest?house_number=${encodeURIComponent(initial.house_number)}`
         );
@@ -277,12 +274,12 @@ const ResidentForm: React.FC<{
           const amount_per_month = d.amount_per_month != null ? Number(d.amount_per_month) : null;
           const total_amount = d.total_amount != null ? Number(d.total_amount) : null;
           setPaymentSummary({ months, amount_per_month, total_amount });
-          // sync dropdown เดือนถ้าอยู่ในชุดที่อนุญาต
+          // sync dropdown เน€เธ”เธทเธญเธเธ–เนเธฒเธญเธขเธนเนเนเธเธเธธเธ”เธ—เธตเนเธญเธเธธเธเธฒเธ•
           if (months && [1, 3, 6, 12].includes(months)) {
             setPayMonths(String(months));
             setPayMonthsError(false);
           }
-          // เติมยอดรวมอัตโนมัติถ้ายังไม่ได้กรอก
+          // เน€เธ•เธดเธกเธขเธญเธ”เธฃเธงเธกเธญเธฑเธ•เนเธเธกเธฑเธ•เธดเธ–เนเธฒเธขเธฑเธเนเธกเนเนเธ”้กรอก
           if (!totalAmount && total_amount != null) {
             setTotalAmount(String(total_amount));
             setTotalAmountError(false);
@@ -301,7 +298,7 @@ const ResidentForm: React.FC<{
   }, [mode, initial?.house_number, totalAmount]);
 
   const submitStep1 = () => {
-    // ล้าง error เดิม
+    // ล้าง error เน€เธ”เธดเธก
     setHouseError(false); setTitleError(false); setFnameError(false); setLnameError(false);
     setPhoneError(false); setMembersError(false); setCarsError(false); setAreaError(false);
     setPayMonthsError(false);
@@ -332,7 +329,7 @@ const ResidentForm: React.FC<{
       return;
     }
 
-    // ตรวจข้อมูลซ้ำ
+    // เธ•รวจข้อมูลซ้ำ
     const others = mode === 'edit' && initial?.id
       ? existingList.filter(r => r.id !== initial.id)
       : existingList;
@@ -355,7 +352,7 @@ const ResidentForm: React.FC<{
       return;
     }
 
-    // ไปขั้นตอนชำระเงิน (ทั้ง add และ edit)
+    // เนเธเธเธฑเนเธเธ•เธญเธเธเธณเธฃเธฐเน€งิน (เธ—ั้ง add และ edit)
     setShowPaymentStep(true);
   };
 
@@ -410,7 +407,7 @@ const ResidentForm: React.FC<{
 
   return (
     <>
-    {/* ขั้นตอน 1: ข้อมูลพื้นฐาน */}
+    {/* เธเธฑเนเธเธ•อน 1: ข้อมูลพื้นฐาน */}
     <Modal visible={visible && !showPaymentStep && !showAccountStep} transparent animationType="fade" onRequestClose={() => !saving && onClose()}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.modalBackdrop}>
@@ -602,7 +599,7 @@ const ResidentForm: React.FC<{
                   </View>
                 </View>
                 <Text style={[styles.modalLabel, themed.modalLabelTextMb12]}>
-                  บ้านเลขที่ {house} — {title} {fname} {lname}
+                  บ้านเลขที่ {house} - {title} {fname} {lname}
                 </Text>
 
                 <ScrollView
@@ -733,7 +730,7 @@ const ResidentForm: React.FC<{
                         setAlertModal({ title: 'จำนวนเดือนไม่ถูกต้อง', message: 'กรุณาเลือกจำนวนเดือน 1, 3, 6 หรือ 12' });
                         return;
                       }
-                      // ถ้างวดเปลี่ยน → ยืนยันก่อน
+                      // ถ้างวดเปลี่ยน ให้ยืนยันก่อน
                       const origPm = initial?.pay_months;
                       if (origPm != null && Number(origPm) !== pm) {
                         setShowConfirmChange(true);
@@ -756,7 +753,7 @@ const ResidentForm: React.FC<{
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCenter}>
             <View style={[styles.confirmCard, themed.confirmCard]}>
-              <Text style={styles.confirmEmoji}>💵</Text>
+              <Text style={styles.confirmEmoji}>⚠️</Text>
               <Text style={[styles.confirmTitle, themed.confirmTitle]}>ยืนยันการเปลี่ยนงวด</Text>
 
               <View style={styles.confirmCompare}>
@@ -797,7 +794,7 @@ const ResidentForm: React.FC<{
         </View>
       </Modal>
 
-      {/* ขั้นตอน 3: สร้างบัญชีผู้ใช้ (add only) */}
+      {/* เธเธฑเนเธเธ•อน 3: สร้างบัญชีผู้ใช้ (add only) */}
       <Modal visible={visible && showPaymentStep && showAccountStep} transparent animationType="fade" onRequestClose={() => !saving && setShowAccountStep(false)}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.modalBackdrop}>
@@ -810,7 +807,7 @@ const ResidentForm: React.FC<{
                   </View>
                 </View>
                 <Text style={[styles.modalLabel, themed.modalLabelTextMb12]}>
-                  บ้านเลขที่ {house} — {title} {fname} {lname}
+                  บ้านเลขที่ {house} - {title} {fname} {lname}
                 </Text>
 
                 <Text style={[styles.modalLabel, themed.modalLabelText]}>User ID <Text style={styles.required}>*</Text></Text>
@@ -880,7 +877,7 @@ const ResidentForm: React.FC<{
         </View>
       </Modal>
 
-      {/* Alert Modal (แทน Alert.alert) */}
+      {/* Alert Modal (เนเธ—น Alert.alert) */}
       <Modal visible={!!alertModal} transparent animationType="fade" onRequestClose={() => setAlertModal(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCenter}>
@@ -942,6 +939,7 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
   const BASE_URL = getBaseUrl();
   const [list, setList] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
 
   const [addVisible, setAddVisible] = useState(false);
@@ -964,9 +962,11 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
       console.warn('regenerate-latest failed:', e?.message || e);
     }
   }, [BASE_URL]);
-  const fetchList = useCallback(async () => {
+  const fetchList = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = !!options?.silent;
     try {
-      setLoading(true);
+      if (silent) setRefreshing(true);
+      else setLoading(true);
       const url = query.trim()
         ? `${BASE_URL}/residents?q=${encodeURIComponent(query.trim())}`
         : `${BASE_URL}/residents`;
@@ -980,11 +980,25 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
     } catch (e: any) {
       setAlertModal2({ title: 'ผิดพลาด', message: e?.message || 'โหลดข้อมูลล้มเหลว' });
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, [BASE_URL, query]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
+
+  useEffect(() => {
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        fetchList({ silent: true });
+      }
+    });
+    return () => appStateSub.remove();
+  }, [fetchList]);
+
+  const onPullRefresh = useCallback(() => {
+    fetchList({ silent: true });
+  }, [fetchList]);
 
   const openAdd = () => setAddVisible(true);
   const closeAdd = () => { if (!addSaving) setAddVisible(false); };
@@ -1017,7 +1031,7 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
       }
       await fetchList();
       closeAdd();
-      // สร้าง/อัปเดตงวดอัตโนมัติหลังบันทึก
+      // สร้าง/เธญเธฑเธเน€เธ”เธ•เธเธงเธ”เธญเธฑเธ•เนเธเธกเธฑเธ•เธดเธซเธฅเธฑเธเธเธฑเธเธ—ึก
       if (payload.pay_months && [1, 3, 6, 12].includes(Number(payload.pay_months))) {
         regenerateInstallmentsLatest(payload.house_number);
       }
@@ -1049,10 +1063,12 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
       }
       await fetchList();
       closeEdit();
-      // สร้าง/อัปเดตงวดอัตโนมัติหลังแก้ไข
+      // สร้าง/เธญเธฑเธเน€เธ”เธ•เธเธงเธ”เธญเธฑเธ•เนเธเธกเธฑเธ•ิหลังแก้ไข
       const months = Number((payload as any).pay_months ?? editItem.pay_months ?? 0);
       const hn = (payload as any).house_number ?? editItem.house_number;
-      if (months && [1, 3, 6, 12].includes(months)) {
+      const previousMonths = Number(editItem.pay_months ?? 0);
+      const monthsChanged = months !== previousMonths;
+      if (monthsChanged && months && [1, 3, 6, 12].includes(months)) {
         regenerateInstallmentsLatest(hn);
       }
     } catch (e: any) {
@@ -1078,7 +1094,7 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
     } catch (e: any) { setAlertModal2({ title: 'ผิดพลาด', message: e?.message || 'ลบไม่สำเร็จ' }); }
   };
 
-  // จัดรูปแบบเบอร์ให้อ่านง่าย
+  // เธเธฑเธ”เธฃเธนเธเนเธเธเน€บอร์ให้อ่านง่าย
   const formatPhone = (s?: string | null) => {
     if (!s) return '';
     const n = String(s).replace(/\D/g, '');
@@ -1108,7 +1124,7 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
             </TouchableOpacity>
           )}
           <View style={[styles.pill, styles.pillBg]}>
-            <Text style={styles.pillText}>👪 {item.household_count}</Text>
+            <Text style={styles.pillText}>👥 {item.household_count}</Text>
           </View>
           <View style={[styles.pill, styles.pillBg]}>
             <Text style={styles.pillText}>🚗 {item.car_count}</Text>
@@ -1138,7 +1154,7 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          onSubmitEditing={fetchList}
+          onSubmitEditing={() => { fetchList(); }}
           placeholder="ค้นหา บ้านเลขที่/ชื่อ/โทร"
           placeholderTextColor={darkMode ? '#9AA0A6' : '#999'}
           style={[styles.input, styles.flex1, themed.inputThemed]}
@@ -1160,6 +1176,8 @@ const UserManage: React.FC<Props> = ({ darkMode }) => {
           contentContainerStyle={styles.listContent}
           renderItem={renderItem}
           ItemSeparatorComponent={ItemSeparator}
+          refreshing={refreshing}
+          onRefresh={onPullRefresh}
         />
       )}
 
@@ -1362,7 +1380,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#EAF8F1',   // เขียวอ่อนนุ่ม
+    backgroundColor: '#EAF8F1',   // เน€ขียวอ่อนนุ่ม
     borderWidth: 1,
     borderColor: '#D6EADF',
     marginRight: 0,
@@ -1405,7 +1423,7 @@ const styles = StyleSheet.create({
   col: { flex: 1 },
   required: { color: '#EF4444' },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 12 : 10, fontSize: 14 },
-  // กรอบแดงเมื่อเบอร์ไม่ครบ 10 หลัก
+  // เธเธฃเธญเธเนเธ”เธเน€เธกเธทเนเธญเน€บอร์ไม่ครบ 10 หลัก
   inputError: { borderColor: '#EF4444', backgroundColor: '#FEF2F2' },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 },
   modalBtn: { minWidth: 96, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, marginLeft: 8 },
@@ -1477,7 +1495,7 @@ const styles = StyleSheet.create({
   confirmBtnSaveText: { fontSize: 15, fontWeight: '700' as const, color: '#fff' },
   confirmEmoji: { fontSize: 40, textAlign: 'center' as const, marginBottom: 8 },
 
-  // Alert modal (แทน Alert.alert)
+  // Alert modal (เนเธ—น Alert.alert)
   alertCard: { borderRadius: 20, padding: 24, borderWidth: 1, width: '100%', maxWidth: 320, alignItems: 'center' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 },
   alertIconRow: { marginBottom: 12 },
   alertIconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FEF3C7', justifyContent: 'center' as const, alignItems: 'center' as const },
@@ -1500,3 +1518,5 @@ const styles = StyleSheet.create({
   phoneActionCancel: { marginTop: 4, paddingVertical: 12, alignItems: 'center' as const },
   phoneActionCancelText: { fontSize: 14, fontWeight: '600' as const, color: '#9CA3AF' },
 }); 
+
+

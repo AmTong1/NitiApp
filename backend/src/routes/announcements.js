@@ -1,6 +1,6 @@
 const { pool } = require('../db/pool');
 const { authGuard, adminOnly } = require('../middleware/auth');
-const { hasDb, tableExists, columnExists } = require('../utils/db');
+const { hasDb, tableExists, columnExists, indexExists } = require('../utils/db');
 const { HOST, PORT } = require('../config/env');
 
 // ============ Announcement Logs Helpers ============
@@ -9,18 +9,20 @@ async function ensureAnnouncementLogsTable() {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS announcement_logs (
-        id BIGSERIAL PRIMARY KEY,
+        id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         action VARCHAR(32) NOT NULL,
         announcement_id INTEGER,
         announcement_title TEXT,
-        changes JSONB,
+        changes JSON,
         performed_by INTEGER,
         performed_by_name VARCHAR(255),
         performed_by_role VARCHAR(32),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_announcement_logs_created ON announcement_logs(created_at DESC)');
+    if (!(await indexExists('announcement_logs', 'idx_announcement_logs_created'))) {
+      await pool.query('CREATE INDEX idx_announcement_logs_created ON announcement_logs(created_at)');
+    }
     return true;
   } catch (e) { console.error('ensureAnnouncementLogsTable error:', e); return false; }
 }
@@ -29,7 +31,7 @@ async function insertAnnouncementLog(action, announcementId, announcementTitle, 
   try {
     await pool.query(
       `INSERT INTO announcement_logs (action, announcement_id, announcement_title, changes, performed_by, performed_by_name, performed_by_role)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+       VALUES (?,?,?,?,?,?,?)`,
       [action, announcementId, announcementTitle, JSON.stringify(changes), user.id, user.full_name || user.username, user.role]
     );
   } catch (e) { console.error('insertAnnouncementLog error:', e); }
@@ -105,7 +107,7 @@ function registerAnnouncementRoutes(app) {
              FROM announcements a
         LEFT JOIN accounts acc1 ON acc1.id = a.created_by
         LEFT JOIN accounts acc2 ON acc2.id = a.updated_by
-            WHERE a.id = $1`,
+            WHERE a.id = ?`,
           [id]
         );
         if (!rows[0]) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
@@ -138,15 +140,18 @@ function registerAnnouncementRoutes(app) {
         cols.push('created_by');
         values.push(req.user.id);
 
-        // Build PostgreSQL placeholders
-        const placeholders = values.map((_, i) => `$${i + 1}`);
-        const sql = `INSERT INTO announcements (${cols.join(', ')}, updated_by)
-                     VALUES (${placeholders.join(', ')}, NULL) RETURNING id`;
+        cols.push('updated_by');
+        values.push(null);
+
+        const placeholders = values.map(() => '?');
+        const sql = `INSERT INTO announcements (${cols.join(', ')})
+                     VALUES (${placeholders.join(', ')})`;
         const [result] = await pool.query(sql, values);
-        const insertId = result[0]?.id;
+        const insertId = result.insertId;
 
         // Log create
         const logChanges = { title: { new: title }, date: { new: date } };
+        if (image) logChanges.image = { new: image };
         if (description) logChanges.description = { new: description };
         if (important) logChanges.important = { new: true };
         insertAnnouncementLog('create', insertId, title, logChanges, req.user);
@@ -156,7 +161,7 @@ function registerAnnouncementRoutes(app) {
              FROM announcements a
         LEFT JOIN accounts acc1 ON acc1.id = a.created_by
         LEFT JOIN accounts acc2 ON acc2.id = a.updated_by
-            WHERE a.id = $1`,
+            WHERE a.id = ?`,
           [insertId]
         );
         return res.status(201).json({ ok: true, data: mapImage(rows[0]) });
@@ -180,24 +185,23 @@ function registerAnnouncementRoutes(app) {
     if (await dbReady()) {
       try {
         // Fetch old data before update
-        const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = $1', [id]);
+        const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = ?', [id]);
         const oldData = oldRows[0] || {};
 
         const fields = [];
         const params = [];
-        let paramIdx = 1;
-        if (title !== undefined) { fields.push(`title = $${paramIdx++}`); params.push(String(title)); }
-        if (date !== undefined) { fields.push(`date = $${paramIdx++}`); params.push(String(date)); }
-        if (image !== undefined) { fields.push(`image = $${paramIdx++}`); params.push(String(image)); }
+        if (title !== undefined) { fields.push('title = ?'); params.push(String(title)); }
+        if (date !== undefined) { fields.push('date = ?'); params.push(String(date)); }
+        if (image !== undefined) { fields.push('image = ?'); params.push(String(image)); }
         const colDesc = await columnExists('announcements', 'description');
         const colImp = await columnExists('announcements', 'important');
-        if (colDesc && description !== undefined) { fields.push(`description = $${paramIdx++}`); params.push(description === null ? null : String(description)); }
-        if (colImp && important !== undefined) { fields.push(`important = $${paramIdx++}`); params.push(important ? true : false); }
-        fields.push(`updated_by = $${paramIdx++}`);
+        if (colDesc && description !== undefined) { fields.push('description = ?'); params.push(description === null ? null : String(description)); }
+        if (colImp && important !== undefined) { fields.push('important = ?'); params.push(important ? true : false); }
+        fields.push('updated_by = ?');
         params.push(req.user.id);
         params.push(id);
         await pool.query(
-          `UPDATE announcements SET ${fields.join(', ')} WHERE id = $${paramIdx}`,
+          `UPDATE announcements SET ${fields.join(', ')} WHERE id = ?`,
           params
         );
 
@@ -222,7 +226,7 @@ function registerAnnouncementRoutes(app) {
              FROM announcements a
         LEFT JOIN accounts acc1 ON acc1.id = a.created_by
         LEFT JOIN accounts acc2 ON acc2.id = a.updated_by
-            WHERE a.id = $1`,
+            WHERE a.id = ?`,
           [id]
         );
         return res.json({ ok: true, data: mapImage(rows[0]) });
@@ -251,16 +255,17 @@ function registerAnnouncementRoutes(app) {
     if (await dbReady()) {
       try {
         // Fetch old data before delete
-        const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = $1', [id]);
+        const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = ?', [id]);
         const oldData = oldRows[0];
 
-        await pool.query('DELETE FROM announcements WHERE id = $1', [id]);
+        await pool.query('DELETE FROM announcements WHERE id = ?', [id]);
 
         // Log delete
         if (oldData) {
           const changes = {};
           if (oldData.title) changes.title = { old: oldData.title };
           if (oldData.date) changes.date = { old: oldData.date };
+          if (oldData.image) changes.image = { old: oldData.image };
           if (oldData.description) changes.description = { old: oldData.description };
           if (oldData.important) changes.important = { old: oldData.important };
           insertAnnouncementLog('delete', id, oldData.title, changes, req.user);
@@ -290,27 +295,76 @@ function registerAnnouncementRoutes(app) {
       const offset = Math.max(parseInt(req.query.offset) || 0, 0);
       const where = [];
       const params = [];
-      let idx = 1;
 
       if (q) {
-        where.push(`(al.announcement_title ILIKE $${idx} OR al.performed_by_name ILIKE $${idx + 1})`);
-        params.push(`%${q}%`, `%${q}%`);
-        idx += 2;
+        where.push('(LOWER(al.announcement_title) LIKE ? OR LOWER(al.performed_by_name) LIKE ?)');
+        params.push(`%${q.toLowerCase()}%`, `%${q.toLowerCase()}%`);
       }
       if (action) {
-        where.push(`al.action = $${idx}`);
+        where.push('al.action = ?');
         params.push(action);
-        idx++;
       }
       const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
       const [rows] = await pool.query(
-        `SELECT al.* FROM announcement_logs al ${whereSql} ORDER BY al.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+        `SELECT
+           al.id,
+           al.action,
+           al.announcement_id,
+           al.announcement_title,
+           al.changes,
+           al.performed_by,
+           al.performed_by_name,
+           al.performed_by_role,
+           DATE_FORMAT(al.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+         FROM announcement_logs al ${whereSql} ORDER BY al.created_at DESC LIMIT ? OFFSET ?`,
         [...params, limit + 1, offset]
       );
       const hasMore = rows.length > limit;
       if (hasMore) rows.pop();
-      return res.json({ ok: true, data: rows, hasMore });
+
+      const data = rows.map((row) => {
+        let changes = row.changes;
+        if (typeof changes === 'string') {
+          try { changes = JSON.parse(changes); } catch { changes = null; }
+        }
+        return {
+          ...row,
+          changes: changes && typeof changes === 'object' ? changes : null,
+        };
+      });
+
+      const missingImageIds = [...new Set(
+        data
+          .filter((row) => row.action !== 'delete' && row.announcement_id && (!row.changes || !Object.prototype.hasOwnProperty.call(row.changes, 'image')))
+          .map((row) => Number(row.announcement_id))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      )];
+
+      if (missingImageIds.length > 0) {
+        const [annRows] = await pool.query(
+          `SELECT id, image FROM announcements WHERE id IN (?)`,
+          [missingImageIds]
+        );
+        const imageById = new Map(
+          (annRows || []).map((r) => [Number(r.id), r.image ? toAbsolute(r.image) : ''])
+        );
+
+        for (const row of data) {
+          const id = Number(row.announcement_id);
+          if (!id || row.action === 'delete') continue;
+          const image = imageById.get(id);
+          if (!image) continue;
+
+          const changes = row.changes && typeof row.changes === 'object' ? row.changes : {};
+          if (!Object.prototype.hasOwnProperty.call(changes, 'image')) {
+            changes.image = { new: image };
+            row.changes = changes;
+          }
+        }
+      }
+
+      return res.json({ ok: true, data, hasMore });
     } catch (e) {
       console.error('GET /announcement-logs error:', e);
       return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });

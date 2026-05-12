@@ -43,7 +43,7 @@ function registerContactRoutes(app) {
              FROM contacts c
         LEFT JOIN accounts a1 ON a1.id = c.created_by
         LEFT JOIN accounts a2 ON a2.id = c.updated_by
-            WHERE c.id = $1`,
+            WHERE c.id = ?`,
           [id]
         );
         if (!rows[0]) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
@@ -67,10 +67,10 @@ function registerContactRoutes(app) {
       try {
         const [result] = await pool.query(
           `INSERT INTO contacts (title, number, created_by, updated_by)
-           VALUES ($1, $2, $3, NULL) RETURNING id`,
+           VALUES (?, ?, ?, NULL)`,
           [title, number, req.user.id]
         );
-        const insertId = result[0]?.id;
+        const insertId = result.insertId;
         const [rows] = await pool.query(
           `SELECT c.*,
                   a1.full_name AS created_by_name,
@@ -78,7 +78,7 @@ function registerContactRoutes(app) {
              FROM contacts c
         LEFT JOIN accounts a1 ON a1.id = c.created_by
         LEFT JOIN accounts a2 ON a2.id = c.updated_by
-            WHERE c.id = $1`,
+            WHERE c.id = ?`,
           [insertId]
         );
         return res.status(201).json({ ok: true, data: rows[0] });
@@ -101,14 +101,13 @@ function registerContactRoutes(app) {
       try {
         const fields = [];
         const params = [];
-        let paramIdx = 1;
-        if (title !== undefined) { fields.push(`title = $${paramIdx++}`); params.push(String(title)); }
-        if (number !== undefined) { fields.push(`number = $${paramIdx++}`); params.push(String(number)); }
-        fields.push(`updated_by = $${paramIdx++}`);
+        if (title !== undefined) { fields.push('title = ?'); params.push(String(title)); }
+        if (number !== undefined) { fields.push('number = ?'); params.push(String(number)); }
+        fields.push('updated_by = ?');
         params.push(req.user.id);
         params.push(id);
         await pool.query(
-          `UPDATE contacts SET ${fields.join(', ')} WHERE id = $${paramIdx}`,
+          `UPDATE contacts SET ${fields.join(', ')} WHERE id = ?`,
           params
         );
         const [rows] = await pool.query(
@@ -118,7 +117,7 @@ function registerContactRoutes(app) {
              FROM contacts c
         LEFT JOIN accounts a1 ON a1.id = c.created_by
         LEFT JOIN accounts a2 ON a2.id = c.updated_by
-            WHERE c.id = $1`,
+            WHERE c.id = ?`,
           [id]
         );
         return res.json({ ok: true, data: rows[0] });
@@ -141,7 +140,7 @@ function registerContactRoutes(app) {
     const id = Number(req.params.id);
     if (await hasDb()) {
       try {
-        await pool.query('DELETE FROM contacts WHERE id = $1', [id]);
+        await pool.query('DELETE FROM contacts WHERE id = ?', [id]);
         return res.json({ ok: true });
       } catch (e) {
         console.error('DELETE /contacts/:id DB error:', e);

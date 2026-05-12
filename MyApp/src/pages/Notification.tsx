@@ -1,16 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Platform, Modal, TouchableWithoutFeedback, ScrollView } from 'react-native';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, Image, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Modal, TouchableWithoutFeedback, ScrollView } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import type { Announcement } from '../types';
-import { BASE_HOST, BASE_PORT } from './config';
+import { BASE_HOST } from './config';
+import { useI18n } from '../i18n';
 
 type NotificationProps = { darkMode: boolean };
-
-const ANDROID_HOST = BASE_HOST;
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 }
 
 // pad2 helper removed - not currently used
@@ -27,8 +26,8 @@ const formatBeThai = (s?: string | null, kind: 'short' | 'long' = 'short'): stri
   if (!d) return String(s ?? '');
   const y = d.getFullYear() + 543;
   const months = kind === 'long'
-    ? ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม']
-    : ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    ? ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+    : ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   const days = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
   return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${y}`;
 };
@@ -42,12 +41,35 @@ const toAbsoluteUrl = (u?: string): string => {
 const ItemSeparator = () => <View style={styles.separator} />;
 
 const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
+  const { t } = useI18n();
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [openItem, setOpenItem] = useState<Announcement | null>(null);
+  const [modalImageAspect, setModalImageAspect] = useState<number>(4 / 3);
   const [overdueNotified, setOverdueNotified] = useState(false);
   const [showOverdueModal, setShowOverdueModal] = useState(false);
   const [overdueItems, setOverdueItems] = useState<Announcement[]>([]);
+
+  const modalImageStyle = useMemo(() => {
+    const ratio = modalImageAspect > 0 ? modalImageAspect : 4 / 3;
+    const maxWidth = Math.round(wp('88%'));
+    const maxHeight = Math.round(hp('32%'));
+
+    let width = maxWidth;
+    if (width / ratio > maxHeight) {
+      width = Math.round(maxHeight * ratio);
+    }
+
+    return { width, aspectRatio: ratio };
+  }, [modalImageAspect]);
+
+  const handleModalImageLoad = useCallback((event: any) => {
+    const width = Number(event?.nativeEvent?.source?.width || 0);
+    const height = Number(event?.nativeEvent?.source?.height || 0);
+    if (width > 0 && height > 0) {
+      setModalImageAspect(width / height);
+    }
+  }, []);
 
   const colors = useMemo(() => ({
     bg: darkMode ? '#121212' : '#FFFFFF',
@@ -125,6 +147,33 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
+  useEffect(() => {
+    const uri = openItem?.image;
+    if (!uri) {
+      setModalImageAspect(4 / 3);
+      return;
+    }
+
+    let cancelled = false;
+
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (cancelled) return;
+        if (width > 0 && height > 0) {
+          setModalImageAspect(width / height);
+        }
+      },
+      () => {
+        if (!cancelled) setModalImageAspect(4 / 3);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [openItem?.image]);
+
   const renderItem = ({ item }: { item: Announcement }) => (
     <TouchableOpacity
       activeOpacity={0.7}
@@ -169,7 +218,7 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
               return (
                 <View style={styles.overdueBadge}>
                   <Ionicons name="alert-circle" size={12} color="#D32F2F" />
-                  <Text style={styles.overdueBadgeText}>เลยกำหนด</Text>
+                  <Text style={styles.overdueBadgeText}>{t('notifOverdue')}</Text>
                 </View>
               );
             }
@@ -204,14 +253,14 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
         ItemSeparatorComponent={ItemSeparator}
         ListHeaderComponent={
           <View style={styles.header}> 
-            <Text style={[styles.headerTitle, { color: colors.text }]}>📢 ประกาศทั้งหมด</Text>
-            <Text style={[styles.headerSubtitle, { color: colors.subtext }]}>รายการล่าสุด</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>{t('notifAllAnnouncements')}</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.subtext }]}>{t('notifLatest')}</Text>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="megaphone-outline" size={56} color={colors.subtext} />
-            <Text style={[styles.emptyText, { color: colors.subtext }]}>ยังไม่มีประกาศ</Text>
+            <Text style={[styles.emptyText, { color: colors.subtext }]}>{t('notifNoAnnouncement')}</Text>
           </View>
         }
         showsVerticalScrollIndicator={false}
@@ -232,22 +281,23 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
                 </TouchableOpacity>
                 {!!openItem && (
                   <>
-                    <Text style={[styles.modalTitle, { color: colors.text }]}>{openItem.title || 'ประกาศ'}</Text>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>{openItem.title || t('notifAnnouncement')}</Text>
                     <ScrollView style={styles.modalScroll}>
                       {openItem.image && (
                          <Image 
                            source={{ uri: openItem.image }} 
-                           style={styles.modalImage} 
-                           resizeMode="cover"
+                           style={[styles.modalImage, modalImageStyle]}
+                           onLoad={handleModalImageLoad}
+                           resizeMode="contain"
                          />
                       )}
                       
-                      <Text style={[styles.modalLabel, styles.mt12, { color: colors.subtext }]}>รายละเอียด</Text>
+                      <Text style={[styles.modalLabel, styles.mt12, { color: colors.subtext }]}>{t('notifDescription')}</Text>
                       <Text style={[styles.modalDesc, { color: colors.text }]}>
                         {openItem.description || '-'}
                       </Text>
 
-                      <Text style={[styles.modalLabel, styles.mt12, { color: colors.subtext }]}>วันที่</Text>
+                      <Text style={[styles.modalLabel, styles.mt12, { color: colors.subtext }]}>{t('notifDate')}</Text>
                       <View style={styles.modalDateRow}>
                         <Ionicons name="calendar-outline" size={16} color={'#2E7D32'} />
                         <Text style={styles.modalDateText}>{formatBeThai(openItem.date)}</Text>
@@ -274,12 +324,12 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
                 
                 {/* Title */}
                 <Text style={[styles.overdueModalTitle, { color: colors.text }]}>
-                  ประกาศเลยกำหนด
+                  {t('notifOverdueAnnouncements')}
                 </Text>
                 
                 {/* Count */}
                 <Text style={[styles.overdueModalSubtitle, { color: colors.subtext }]}>
-                  มี {overdueItems.length} รายการที่วันเลยกำหนดแล้ว
+                  {t('notifOverdueCountMsg', { n: String(overdueItems.length) })}
                 </Text>
                 
                 {/* List */}
@@ -299,7 +349,7 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
                   ))}
                   {overdueItems.length > 5 && (
                     <Text style={[styles.overdueMoreText, { color: colors.subtext }]}>
-                      และอีก {overdueItems.length - 5} รายการ...
+                      {t('notifAndMore', { n: String(overdueItems.length - 5) })}
                     </Text>
                   )}
                 </ScrollView>
@@ -309,7 +359,7 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
                   style={styles.overdueOkBtn}
                   onPress={() => setShowOverdueModal(false)}
                 >
-                  <Text style={styles.overdueOkBtnText}>ตกลง</Text>
+                  <Text style={styles.overdueOkBtnText}>{t('ok')}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -323,20 +373,19 @@ const Notification: React.FC<NotificationProps> = ({ darkMode }) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
-  listContent: { paddingHorizontal: 12, paddingVertical: 10, flexGrow: 1 },
-  separator: { height: 12 },
+  listContent: { paddingHorizontal: wp('3%'), paddingVertical: hp('1.3%'), flexGrow: 1 },
+  separator: { height: hp('1.5%') },
 
   // Header
-  header: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 20 },
-  headerTitle: { fontSize: 22, fontWeight: '800', marginBottom: 6 },
-  headerSubtitle: { fontSize: 13, fontWeight: '500' },
+  header: { alignItems: 'center', paddingVertical: hp('2.5%'), paddingHorizontal: wp('5%') },
+  headerTitle: { fontSize: wp('5.5%'), fontWeight: '800', marginBottom: hp('0.8%') },
+  headerSubtitle: { fontSize: wp('3.2%'), fontWeight: '500' },
 
-  // Card (style similar to call.tsx)
   // Card
   card: {
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 14,
+    borderRadius: wp('5%'),
+    padding: wp('3.5%'),
+    marginBottom: hp('1.7%'),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
@@ -347,9 +396,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cardImage: {
-    width: 65,
-    height: 65,
-    borderRadius: 14,
+    width: wp('16%'),
+    height: wp('16%'),
+    borderRadius: wp('3.5%'),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -361,17 +410,17 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     backgroundColor: '#FFC107',
-    borderTopRightRadius: 20,
-    borderBottomLeftRadius: 12,
-    width: 32,
-    height: 32,
+    borderTopRightRadius: wp('5%'),
+    borderBottomLeftRadius: wp('3%'),
+    width: wp('8%'),
+    height: wp('8%'),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
   cardContent: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: wp('3.5%'),
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -379,10 +428,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: wp('4.5%'),
     fontWeight: '700',
-    lineHeight: 26,
-    marginBottom: 6,
+    lineHeight: wp('6.5%'),
+    marginBottom: hp('0.8%'),
   },
   metaRow: {
     flexDirection: 'row',
@@ -392,41 +441,41 @@ const styles = StyleSheet.create({
   dateBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    marginRight: 6,
-    marginBottom: 4,
+    paddingHorizontal: wp('2.5%'),
+    paddingVertical: hp('0.6%'),
+    borderRadius: wp('2%'),
+    marginRight: wp('1.5%'),
+    marginBottom: hp('0.5%'),
   },
-  dateBadgeText: { fontSize: 14, fontWeight: '700', marginLeft: 4 },
+  dateBadgeText: { fontSize: wp('3.5%'), fontWeight: '700', marginLeft: wp('1%') },
   overdueBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFEBEE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: wp('2%'),
+    paddingVertical: hp('0.5%'),
+    borderRadius: wp('2%'),
     borderWidth: 1,
     borderColor: '#FFCDD2',
-    marginBottom: 4,
+    marginBottom: hp('0.5%'),
   },
-  overdueBadgeText: { marginLeft: 4, color: '#D32F2F', fontSize: 12, fontWeight: '700' },
+  overdueBadgeText: { marginLeft: wp('1%'), color: '#D32F2F', fontSize: wp('3%'), fontWeight: '700' },
   importantBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: wp('2%'),
+    paddingVertical: hp('0.5%'),
+    borderRadius: wp('2%'),
     backgroundColor: 'rgba(255, 193, 7, 0.15)',
-    marginRight: 6,
-    marginBottom: 4,
+    marginRight: wp('1.5%'),
+    marginBottom: hp('0.5%'),
   },
-  importantBadgeText: { marginLeft: 4, color: '#F9A825', fontSize: 12, fontWeight: '700' },
-  descText: { fontSize: 14, lineHeight: 22 },
+  importantBadgeText: { marginLeft: wp('1%'), color: '#F9A825', fontSize: wp('3%'), fontWeight: '700' },
+  descText: { fontSize: wp('3.5%'), lineHeight: wp('5.5%') },
 
   // Empty
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyText: { fontSize: 16, fontWeight: '800', marginTop: 12 },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: hp('7.5%') },
+  emptyText: { fontSize: wp('4%'), fontWeight: '800', marginTop: hp('1.5%') },
 
   // ===== Modal =====
   modalBackdrop: {
@@ -434,53 +483,51 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: wp('5%'),
   },
   modalCard: {
-    width: '92%',
+    width: '94%',
     maxWidth: 520,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: wp('4.5%'),
+    padding: wp('3.5%'),
     borderWidth: 1,
   },
-  modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 10 },
+  modalTitle: { fontSize: wp('5%'), fontWeight: '800', marginBottom: hp('1.3%') },
   modalImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 16,
-    backgroundColor: '#F5F5F5',
+    borderRadius: wp('3%'),
+    marginBottom: hp('2%'),
+    alignSelf: 'center',
   },
-  modalLabel: { fontSize: 12, fontWeight: '700', marginBottom: 6 },
-  modalDesc: { fontSize: 14, lineHeight: 20 },
-  modalScroll: { maxHeight: 460 },
+  modalLabel: { fontSize: wp('3%'), fontWeight: '700', marginBottom: hp('0.8%') },
+  modalDesc: { fontSize: wp('3.5%'), lineHeight: wp('5%') },
+  modalScroll: { maxHeight: hp('57%') },
   modalDateRow: { flexDirection: 'row', alignItems: 'center' },
   modalDateText: {
-    marginLeft: 8,
-    fontSize: 14,
+    marginLeft: wp('2%'),
+    fontSize: wp('3.5%'),
     fontWeight: '800',
     color: '#1B5E20',
     backgroundColor: 'rgba(76, 175, 80, 0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: wp('2.5%'),
+    paddingVertical: hp('0.5%'),
     borderRadius: 999,
   },
   modalCloseBtn: {
-    marginTop: 16,
+    marginTop: hp('2%'),
     alignSelf: 'flex-end',
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingHorizontal: wp('4.5%'),
+    paddingVertical: hp('1.5%'),
+    borderRadius: wp('3%'),
   },
   modalCloseText: { color: '#fff', fontWeight: '800' },
   modalCloseX: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    top: hp('1.3%'),
+    right: wp('2.5%'),
+    width: wp('9%'),
+    height: wp('9%'),
+    borderRadius: wp('4.5%'),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 100,
@@ -490,87 +537,89 @@ const styles = StyleSheet.create({
   overdueModalContent: {
     width: '92%',
     maxWidth: 400,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: wp('5%'),
+    padding: wp('6%'),
     borderWidth: 1,
     alignItems: 'center',
   },
   overdueIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: wp('20%'),
+    height: wp('20%'),
+    borderRadius: wp('10%'),
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: hp('2%'),
   },
   overdueModalTitle: {
-    fontSize: 22,
+    fontSize: wp('5.5%'),
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: hp('1%'),
   },
   overdueModalSubtitle: {
-    fontSize: 14,
+    fontSize: wp('3.5%'),
     fontWeight: '500',
-    marginBottom: 16,
+    marginBottom: hp('2%'),
   },
   overdueList: {
     width: '100%',
-    maxHeight: 200,
+    maxHeight: hp('25%'),
   },
   overdueItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: hp('1.3%'),
+    paddingHorizontal: wp('3%'),
     borderBottomWidth: 1,
   },
   overdueItemDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: wp('2%'),
+    height: wp('2%'),
+    borderRadius: wp('1%'),
     backgroundColor: '#B00020',
-    marginRight: 12,
+    marginRight: wp('3%'),
   },
   overdueItemContent: {
     flex: 1,
   },
   overdueItemTitle: {
-    fontSize: 14,
+    fontSize: wp('3.5%'),
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: hp('0.3%'),
   },
   overdueItemDate: {
-    fontSize: 12,
+    fontSize: wp('3%'),
     fontWeight: '600',
   },
   overdueMoreText: {
-    fontSize: 13,
+    fontSize: wp('3.2%'),
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: hp('1%'),
   },
   overdueOkBtn: {
-    marginTop: 20,
+    marginTop: hp('2.5%'),
     backgroundColor: '#F59E0B',
-    paddingHorizontal: 40,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingHorizontal: wp('10%'),
+    paddingVertical: hp('1.7%'),
+    borderRadius: wp('3%'),
   },
   overdueOkBtnText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: wp('4%'),
     fontWeight: '700',
   },
   cardImageDark: { backgroundColor: '#2A2A2A' },
   cardImageLight: { backgroundColor: '#F5F5F5' },
   dateBadgeTextDark: { color: '#81C784' },
   dateBadgeTextLight: { color: '#2E7D32' },
-  mt6: { marginTop: 6 },
-  mt12: { marginTop: 12 },
+  mt6: { marginTop: hp('0.8%') },
+  mt12: { marginTop: hp('1.5%') },
   modalCloseXDark: { backgroundColor: '#2A2A2A' },
   modalCloseXLight: { backgroundColor: '#EEF2F5' },
   colorDarkRed: { color: '#B00020' },
 });
 
 export default Notification;
+
+

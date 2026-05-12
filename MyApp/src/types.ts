@@ -1,4 +1,4 @@
-export type Page = 'login' | 'home' | 'qrcode' | 'notification' | 'admin' | 'call' | 'repairst'| 'reg'| 'chat' | 'announcement' | 'payment' | 'paymentDetail' | 'usermgr' | 'profile' | 'superadmin';
+export type Page = 'login' | 'home' | 'qrcode' | 'notification' | 'admin' | 'call' | 'repairst'| 'reg'| 'chat' | 'announcement' | 'payment' | 'paymentDetail' | 'usermgr' | 'profile' | 'superadmin' | 'settings' | 'financial';
 
 export type Announcement = {
   id?: number | string;
@@ -7,6 +7,8 @@ export type Announcement = {
   image: string; // uri
   important?: boolean;
   description?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type MenuItem = {

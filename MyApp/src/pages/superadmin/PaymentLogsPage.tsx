@@ -3,9 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator, Image, Modal, ScrollView,
 } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrl } from '../SuperAdmin';
+import { formatThaiDateTime, toSortableMs, toThaiYearMonthKey } from '../../lib/datetime';
 
 const themeColors = {
     primary: '#4F46E5',
@@ -42,18 +44,6 @@ interface PaymentLogsPageProps {
   darkMode?: boolean;
 }
 
-const formatDate = (dateString?: string) => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  return d.toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
 const formatCurrency = (amount: string | number) => {
   return Number(amount).toLocaleString('th-TH', {
     style: 'currency',
@@ -77,6 +67,22 @@ const getMethodIcon = (method?: string): 'cash-outline' | 'qr-code-outline' | 'c
     case 'bank_transfer': return 'card-outline';
     default: return 'help-circle-outline';
   }
+};
+
+const isSlipCheckedPayment = (item: PaymentLog) => {
+  const method = String(item.paid_method || '').toLowerCase();
+  return method === 'promptpay' || !!item.proof_image;
+};
+
+const getPaidByDisplay = (item: PaymentLog) => {
+  if (isSlipCheckedPayment(item)) return 'ผ่านระบบ';
+  return item.paid_by || '-';
+};
+
+const getApprovedByDisplay = (item: PaymentLog) => {
+  if (item.approved_by) return String(item.approved_by);
+  if (item.status === 'paid' && isSlipCheckedPayment(item)) return 'ผ่านระบบ';
+  return null;
 };
 
 const PaymentLogsPage: React.FC<PaymentLogsPageProps> = ({ onBack }) => {
@@ -145,8 +151,7 @@ const PaymentLogsPage: React.FC<PaymentLogsPageProps> = ({ onBack }) => {
       result = result.filter(l => {
         const d = l.paid_at || l.due_date;
         if (!d) return false;
-        const dt = new Date(d);
-        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        const key = toThaiYearMonthKey(d);
         return key === selectedMonth;
       });
     }
@@ -164,8 +169,8 @@ const PaymentLogsPage: React.FC<PaymentLogsPageProps> = ({ onBack }) => {
       );
     }
     return [...result].sort((a, b) => {
-      const da = new Date(a.paid_at || a.due_date).getTime();
-      const db = new Date(b.paid_at || b.due_date).getTime();
+      const da = toSortableMs(a.paid_at || a.due_date);
+      const db = toSortableMs(b.paid_at || b.due_date);
       return sortNewest ? db - da : da - db;
     });
   }, [logs, searchText, sortNewest, selectedMonth, selectedStatus]);
@@ -210,7 +215,7 @@ const PaymentLogsPage: React.FC<PaymentLogsPageProps> = ({ onBack }) => {
             {formatCurrency(item.amount)}
         </Text>
         <Text style={[styles.date, { color: colors.subtext }]}>
-            กำหนด: {formatDate(item.due_date)}
+          กำหนด: {formatThaiDateTime(item.due_date)}
         </Text>
       </View>
 
@@ -230,25 +235,25 @@ const PaymentLogsPage: React.FC<PaymentLogsPageProps> = ({ onBack }) => {
 
       {/* ข้อมูลผู้ชำระ & ผู้ยืนยัน */}
       <View style={styles.personInfo}>
-          {item.paid_by && (
+          {(item.paid_by || isSlipCheckedPayment(item)) && (
               <View style={styles.personRow}>
                 <Ionicons name="person-outline" size={14} color={colors.subtext} />
                 <Text style={[styles.personLabel, { color: colors.subtext }]}>จ่ายโดย: </Text>
-                <Text style={[styles.personValue, { color: colors.text }]}>{item.paid_by}</Text>
+                <Text style={[styles.personValue, { color: colors.text }]}>{getPaidByDisplay(item)}</Text>
               </View>
           )}
-          {item.approved_by && (
+          {getApprovedByDisplay(item) && (
               <View style={styles.personRow}>
                 <Ionicons name="checkmark-circle-outline" size={14} color={colors.success} />
                 <Text style={[styles.personLabel, { color: colors.subtext }]}>ยืนยันโดย: </Text>
-                <Text style={[styles.personValue, { color: colors.success }]}>{item.approved_by}</Text>
+                <Text style={[styles.personValue, { color: colors.success }]}>{getApprovedByDisplay(item)}</Text>
               </View>
           )}
           {item.paid_at && (
               <View style={styles.personRow}>
                 <Ionicons name="calendar-outline" size={14} color={colors.subtext} />
                 <Text style={[styles.personLabel, { color: colors.subtext }]}>วันที่ชำระ: </Text>
-                <Text style={[styles.personValue, { color: colors.text }]}>{formatDate(item.paid_at)}</Text>
+                <Text style={[styles.personValue, { color: colors.text }]}>{formatThaiDateTime(item.paid_at)}</Text>
               </View>
           )}
       </View>
@@ -344,19 +349,23 @@ const PaymentLogsPage: React.FC<PaymentLogsPageProps> = ({ onBack }) => {
           {statusFilters.map((f) => {
             const isActive = selectedStatus === f.key;
             const c = f.key === 'all' ? colors.primary : getStatusColor(f.key);
+            const statusPillStyle = {
+              borderColor: c,
+              backgroundColor: isActive ? c : '#F9FAFB',
+            };
+            const statusPillTextStyle = {
+              color: isActive ? '#fff' : c,
+            };
             return (
               <TouchableOpacity
                 key={f.key}
                 style={[
                   styles.statusPill,
-                  {
-                    borderColor: c,
-                    backgroundColor: isActive ? c : '#F9FAFB',
-                  },
+                  statusPillStyle,
                 ]}
                 onPress={() => setSelectedStatus(f.key)}
               >
-                <Text style={[styles.statusPillText, { color: isActive ? '#fff' : c }]}>
+                <Text style={[styles.statusPillText, statusPillTextStyle]}>
                   {f.label}
                 </Text>
               </TouchableOpacity>
@@ -454,322 +463,72 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: wp('4%'),
     borderBottomWidth: 1,
-    gap: 16,
+    gap: wp('4%'),
   },
-  backBtn: { padding: 4 },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  searchInputWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-  },
-  sortBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#EEF2FF',
-  },
-  sortText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    gap: 8,
-  },
-  monthPickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  monthPickerText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  clearMonthBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  clearMonthText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  countText: {
-    fontSize: 12,
-  },
-  countTextRight: {
-    marginLeft: 'auto',
-  },
-  statusFilterRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-  },
-  statusFilterContent: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingRight: 8,
-  },
-  statusPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  monthDropdown: {
-    // unused, kept for reference
-  },
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pickerCard: {
-    width: '85%',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-  },
-  yearNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  yearArrow: {
-    padding: 6,
-  },
-  yearText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 12,
-  },
-  monthCell: {
-    width: '25%',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  monthCellActive: {
-    backgroundColor: themeColors.primary,
-  },
-  monthCellText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  monthCellTextActive: {
-    color: '#fff',
-  },
-  monthCellTextInactive: {
-    color: themeColors.text,
-  },
-  allMonthBtn: {
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  allMonthBtnActive: {
-    backgroundColor: '#E0E7FF',
-  },
-  allMonthText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  allMonthTextActive: {
-    color: themeColors.primary,
-  },
-  allMonthTextInactive: {
-    color: themeColors.subtext,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 40,
-  },
-  list: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  houseBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: themeColors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  houseText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  amount: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  date: {
-    fontSize: 12,
-  },
-  details: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 8,
-  },
-  detailText: {
-    fontSize: 13,
-  },
-  methodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  personInfo: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 8,
-    marginBottom: 8,
-    gap: 6,
-  },
-  personRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  personLabel: {
-    fontSize: 13,
-  },
-  personValue: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  noteBox: {
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  noteText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  proofBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    marginTop: 4,
-    gap: 6,
-  },
-  proofText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCloseBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    zIndex: 10,
-    padding: 10,
-  },
-  fullImage: {
-    width: '100%',
-    height: '80%',
-  },
-  emptyText: {
-    marginTop: 12,
-  },
+  backBtn: { padding: wp('1%') },
+  headerTitle: { fontSize: wp('5%'), fontWeight: '700' },
+  searchContainer: { paddingHorizontal: wp('4%'), paddingVertical: hp('1.2%'), borderBottomWidth: 1 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: wp('2.5%') },
+  searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: wp('3%'), paddingHorizontal: wp('3%'), height: hp('5.2%'), gap: wp('2%') },
+  searchInput: { flex: 1, fontSize: wp('3.5%') },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: wp('1%'), paddingHorizontal: wp('3%'), paddingVertical: hp('1%'), borderRadius: wp('5%'), backgroundColor: '#EEF2FF' },
+  sortText: { fontSize: wp('3%'), fontWeight: '600' },
+  filterRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: wp('4%'), paddingVertical: hp('1%'), borderBottomWidth: 1, gap: wp('2%') },
+  monthPickerBtn: { flexDirection: 'row', alignItems: 'center', gap: wp('1.5%'), paddingHorizontal: wp('3%'), paddingVertical: hp('0.9%'), borderRadius: wp('2.5%'), borderWidth: 1, backgroundColor: '#F9FAFB' },
+  monthPickerText: { fontSize: wp('3.2%'), fontWeight: '500' },
+  clearMonthBtn: { paddingHorizontal: wp('2%'), paddingVertical: hp('0.5%') },
+  clearMonthText: { fontSize: wp('3%'), fontWeight: '600' },
+  countText: { fontSize: wp('3%') },
+  countTextRight: { marginLeft: 'auto' },
+  statusFilterRow: { paddingHorizontal: wp('4%'), paddingVertical: hp('1%'), borderBottomWidth: 1 },
+  statusFilterContent: { flexDirection: 'row', gap: wp('2%'), paddingRight: wp('2%') },
+  statusPill: { paddingHorizontal: wp('3%'), paddingVertical: hp('0.75%'), borderRadius: 999, borderWidth: 1, backgroundColor: '#F9FAFB' },
+  statusPillText: { fontSize: wp('3%'), fontWeight: '600' },
+  monthDropdown: {},
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  pickerCard: { width: '85%', borderRadius: wp('4%'), paddingVertical: hp('2%'), paddingHorizontal: wp('2%'), elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+  yearNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: wp('4%'), paddingVertical: hp('1.2%') },
+  yearArrow: { padding: wp('1.5%') },
+  yearText: { fontSize: wp('4%'), fontWeight: '700' },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: wp('3%') },
+  monthCell: { width: '25%', alignItems: 'center', paddingVertical: hp('1.2%'), borderRadius: wp('2%') },
+  monthCellActive: { backgroundColor: themeColors.primary },
+  monthCellText: { fontSize: wp('3.5%'), fontWeight: '500' },
+  monthCellTextActive: { color: '#fff' },
+  monthCellTextInactive: { color: themeColors.text },
+  allMonthBtn: { alignItems: 'center', marginHorizontal: wp('4%'), marginTop: hp('0.75%'), paddingVertical: hp('1%'), borderRadius: wp('2%') },
+  allMonthBtnActive: { backgroundColor: '#E0E7FF' },
+  allMonthText: { fontSize: wp('3.2%'), fontWeight: '600' },
+  allMonthTextActive: { color: themeColors.primary },
+  allMonthTextInactive: { color: themeColors.subtext },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: hp('5%') },
+  list: { padding: wp('4%'), paddingBottom: hp('12.5%') },
+  card: { borderRadius: wp('3%'), borderWidth: 1, padding: wp('4%'), marginBottom: hp('1.5%') },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: hp('1.5%') },
+  houseBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: themeColors.primary, paddingHorizontal: wp('2%'), paddingVertical: hp('0.5%'), borderRadius: wp('2%'), gap: wp('1%') },
+  houseText: { color: '#fff', fontWeight: '700', fontSize: wp('3%') },
+  statusBadge: { paddingHorizontal: wp('2%'), paddingVertical: hp('0.25%'), borderRadius: wp('3%') },
+  statusText: { fontWeight: '600', fontSize: wp('3%') },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: hp('1%') },
+  amount: { fontSize: wp('4.5%'), fontWeight: '700' },
+  date: { fontSize: wp('3%') },
+  details: { flexDirection: 'row', flexWrap: 'wrap', gap: wp('3%'), marginBottom: hp('1%') },
+  detailText: { fontSize: wp('3.2%') },
+  methodRow: { flexDirection: 'row', alignItems: 'center', gap: wp('1%') },
+  personInfo: { borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: hp('1%'), marginBottom: hp('1%'), gap: hp('0.75%') },
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: wp('1%') },
+  personLabel: { fontSize: wp('3.2%') },
+  personValue: { fontSize: wp('3.2%'), fontWeight: '600' },
+  noteBox: { padding: wp('2%'), borderRadius: wp('2%'), marginTop: hp('0.5%'), marginBottom: hp('1%') },
+  noteText: { fontSize: wp('3%'), fontStyle: 'italic' },
+  proofBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: hp('1%'), borderTopWidth: 1, borderTopColor: '#eee', marginTop: hp('0.5%'), gap: wp('1.5%') },
+  proofText: { fontSize: wp('3.5%'), fontWeight: '500' },
+  modalOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  modalCloseBtn: { position: 'absolute', top: hp('5%'), right: wp('5%'), zIndex: 10, padding: wp('2.5%') },
+  fullImage: { width: '100%', height: '80%' },
+  emptyText: { marginTop: hp('1.5%') },
 });
 
 export default PaymentLogsPage;

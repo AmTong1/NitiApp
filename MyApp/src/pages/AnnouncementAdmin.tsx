@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,12 @@ import {
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from '../components/GlobalAlert';
-import { BASE_HOST, BASE_PORT } from './config';
+import { BASE_HOST } from './config';
 import { launchImageLibrary, Asset } from 'react-native-image-picker';
 import ImageResizer from 'react-native-image-resizer';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
+import { useI18n } from '../i18n';
 
 // --- Config: Thai Locale for Calendar ---
 LocaleConfig.locales.th = {
@@ -32,8 +33,6 @@ LocaleConfig.locales.th = {
   today: 'วันนี้',
 };
 LocaleConfig.defaultLocale = 'th';
-
-const ANDROID_HOST = BASE_HOST;
 
 // --- Types ---
 type Role = 'admin' | 'user' | 'superadmin';
@@ -48,8 +47,7 @@ type AnnouncementItem = {
 
 // --- Utilities ---
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 }
 
 const COLORS = {
@@ -61,6 +59,13 @@ const COLORS = {
   greenSoft: '#E9F7EE',
   orange: '#FFA21A',
   red: '#EF5350',
+};
+
+const ANNOUNCEMENT_DESCRIPTION_MAX_LENGTH = 2000;
+
+const waitForKeyboardToSettleBeforeMedia = async () => {
+  Keyboard.dismiss();
+  await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'android' ? 320 : 120));
 };
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -180,9 +185,9 @@ const CalendarDay: React.FC<{
 };
 
 const CATEGORY_ICONS: { key: string; label: string; url: string }[] = [
-  { key: 'electric', label: 'ไฟฟ้า', url: 'https://cdn-icons-png.flaticon.com/512/2990/2990873.png' },
-  { key: 'water',    label: 'น้ำ',  url: 'https://cdn-icons-png.flaticon.com/512/4497/4497450.png' },
-  { key: 'meeting',  label: 'ประชุม', url: 'https://cdn-icons-png.flaticon.com/512/7185/7185630.png' },
+  { key: 'electric', label: 'annElectricity', url: 'https://cdn-icons-png.flaticon.com/512/2990/2990873.png' },
+  { key: 'water',    label: 'annWater', url: 'https://cdn-icons-png.flaticon.com/512/4497/4497450.png' },
+  { key: 'meeting',  label: 'annMeeting', url: 'https://cdn-icons-png.flaticon.com/512/7185/7185630.png' },
 ];
 
 const AnnouncementFormModal: React.FC<{
@@ -195,6 +200,7 @@ const AnnouncementFormModal: React.FC<{
   onClose: () => void;
   onSubmit: (payload: { title: string; date: string; image: string; important?: boolean; description?: string }) => void;
 }> = ({ visible, darkMode, colors, mode, initial, saving, onClose, onSubmit }) => {
+  const { t } = useI18n();
   const [title, setTitle] = useState(initial?.title ?? '');
   const [dateText, setDateText] = useState(initial?.date ?? '');
   const [dateVal, setDateVal] = useState<Date | null>(null);
@@ -262,8 +268,8 @@ const AnnouncementFormModal: React.FC<{
 
   const submit = () => {
     const missing: string[] = [];
-    if (!title.trim()) missing.push('หัวข้อประกาศ');
-    if (!dateText.trim()) missing.push('วันที่');
+    if (!title.trim()) missing.push(t('annSubject'));
+    if (!dateText.trim()) missing.push(t('annDate'));
 
     if (missing.length > 0) {
       setMissingFields(missing);
@@ -276,13 +282,14 @@ const AnnouncementFormModal: React.FC<{
 
   const pickFromGallery = async () => {
     try {
+      await waitForKeyboardToSettleBeforeMedia();
       const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, quality: 0.9 });
       if (result.didCancel) return;
       const asset = result.assets?.[0];
       if (!asset) return;
 
       const token = await AsyncStorage.getItem('token');
-      if (!token) throw new Error('ยังไม่ได้เข้าสู่ระบบ');
+      if (!token) throw new Error(t('notLoggedIn'));
 
       const userTag = 'admin';
       const file = await prepareUploadFile(asset, userTag);
@@ -297,11 +304,11 @@ const AnnouncementFormModal: React.FC<{
         body: form,
       });
       const data = await res.json();
-      if (!res.ok || !data?.url) throw new Error(data?.error || 'อัปโหลดรูปไม่สำเร็จ');
+      if (!res.ok || !data?.url) throw new Error(data?.error || t('annUploadFailed'));
       const full = toAbsoluteUrl(String(data.url));
       setImage(full);
     } catch (e: any) {
-      showAlert('อัปโหลดรูปไม่สำเร็จ', e?.message || 'ลองใหม่อีกครั้ง');
+      showAlert(t('annUploadFailed'), e?.message || t('annRetry'));
     }
   };
 
@@ -313,21 +320,21 @@ const AnnouncementFormModal: React.FC<{
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalCenter}>
             <View style={[styles.modalCard, { backgroundColor: colors.cardBg, borderColor: colors.line }]}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {mode === 'add' ? 'เพิ่มประกาศใหม่' : 'แก้ไขประกาศ'}
+                {mode === 'add' ? t('annAddNew') : t('annEdit')}
               </Text>
 
-              <Text style={[styles.modalLabel, { color: colors.subtext }]}>หัวข้อ</Text>
+              <Text style={[styles.modalLabel, { color: colors.subtext }]}>{t('annSubject')}</Text>
               <TextInput
                 value={title}
                 onChangeText={setTitle}
-                placeholder="เช่น แจ้งประชุมใหญ่สามัญประจำปี"
+                placeholder={t('annSubjectPlaceholder')}
                 placeholderTextColor={darkMode ? '#888' : '#9AA3AB'}
                 style={[styles.input, { color: colors.text, borderColor: colors.line }]}
                 maxLength={120}
                 returnKeyType="next"
               />
 
-              <Text style={[styles.modalLabel, styles.mt10, { color: colors.subtext }]}>วันที่</Text>
+              <Text style={[styles.modalLabel, styles.mt10, { color: colors.subtext }]}>{t('annDate')}</Text>
               <TouchableOpacity
                 onPress={() => setShowPicker(true)}
                 activeOpacity={0.8}
@@ -335,7 +342,7 @@ const AnnouncementFormModal: React.FC<{
               >
                 <Ionicons name="calendar-outline" size={16} color={colors.subtext} />
                 <Text style={[styles.ml8, { color: dateText ? colors.text : (darkMode ? '#888' : '#9AA3AB') }]}>
-                  {dateText || 'เช่น 1 ม.ค. 2568'}
+                  {dateText || t('annDatePlaceholder')}
                 </Text>
               </TouchableOpacity>
               {showPicker && (
@@ -348,7 +355,7 @@ const AnnouncementFormModal: React.FC<{
                             <Ionicons name="close" size={18} color={darkMode ? '#E5E7EB' : '#333'} />
                           </TouchableOpacity>
                           <View style={styles.pickerHeader}>
-                            <Text style={[styles.pickerTitle, { color: colors.text }]}>เลือกวันที่</Text>
+                            <Text style={[styles.pickerTitle, { color: colors.text }]}>{t('selectDate')}</Text>
                             <TouchableOpacity 
                               onPress={() => {
                                 const today = new Date();
@@ -359,7 +366,7 @@ const AnnouncementFormModal: React.FC<{
                               style={styles.todayBtn}
                             >
                               <Ionicons name="today-outline" size={18} color="#fff" />
-                              <Text style={styles.todayBtnText}>วันนี้</Text>
+                              <Text style={styles.todayBtnText}>{t('today')}</Text>
                             </TouchableOpacity>
                           </View>
                           {Platform.OS === 'android' ? (
@@ -413,7 +420,7 @@ const AnnouncementFormModal: React.FC<{
                 </Modal>
               )}
 
-              <Text style={[styles.modalLabel, styles.mt10, { color: colors.subtext }]}>ลิงก์รูปภาพ (ถ้ามี)</Text>
+              <Text style={[styles.modalLabel, styles.mt10, { color: colors.subtext }]}>{t('annImageLink')}</Text>
               <TextInput
                 value={image}
                 onChangeText={setImage}
@@ -434,27 +441,28 @@ const AnnouncementFormModal: React.FC<{
                     onPress={() => setImage(cat.url)}
                   >
                     <Ionicons name="pricetag-outline" size={14} color={colors.text} />
-                    <Text style={[styles.catChipText, { color: colors.text }]}>{cat.label}</Text>
+                    <Text style={[styles.catChipText, { color: colors.text }]}>{t(cat.label)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               {/* Description */}
-              <Text style={[styles.modalLabel, styles.mt10, { color: colors.subtext }]}>รายละเอียด</Text>
+              <Text style={[styles.modalLabel, styles.mt10, { color: colors.subtext }]}>{t('annDescriptionLabel')}</Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="เพิ่มรายละเอียดประกาศ..."
+                placeholder={t('annDescriptionPlaceholder')}
                 placeholderTextColor={darkMode ? '#888' : '#9AA3AB'}
                 style={[styles.input, styles.inputMultiline, { color: colors.text, borderColor: colors.line }]}
                 multiline
+                maxLength={ANNOUNCEMENT_DESCRIPTION_MAX_LENGTH}
               />
 
               {/* Image picker + preview */}
               <View style={styles.rowCenterMt10}>
                 <TouchableOpacity onPress={pickFromGallery} style={styles.pickImageBtn}>
                   <Ionicons name="image-outline" size={16} color="#fff" />
-                  <Text style={styles.pickImageBtnText}>เลือกรูปจากเครื่อง</Text>
+                  <Text style={styles.pickImageBtnText}>{t('annChooseImage')}</Text>
                 </TouchableOpacity>
                 {!!image && (
                   <View style={styles.previewRow}>
@@ -474,17 +482,17 @@ const AnnouncementFormModal: React.FC<{
                   important ? styles.importantChipActive : (darkMode ? styles.bgDark22 : styles.bgLightF6),
                 ]}>
                   <Ionicons name={important ? 'star' : 'star-outline'} size={16} color={important ? '#FFC107' : colors.subtext} />
-                  <Text style={[styles.importantChipText, { color: colors.text }]}>ประกาศสำคัญ</Text>
+                  <Text style={[styles.importantChipText, { color: colors.text }]}>{t('annImportant')}</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.modalActions}>
                 <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={onClose} disabled={saving}>
-                  <Text style={styles.modalCancelText}>ยกเลิก</Text>
+                  <Text style={styles.modalCancelText}>{t('cancel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.modalBtn, styles.modalSave]} onPress={submit} disabled={saving}>
-                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalSaveText}>บันทึก</Text>}
+                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalSaveText}>{t('save')}</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -504,10 +512,10 @@ const AnnouncementFormModal: React.FC<{
                   <Ionicons name="alert-circle" size={32} color={COLORS.orange} />
                 </View>
                 <Text style={[styles.modalTitle, styles.textCenterMb8, { color: colors.text }]}>
-                  ข้อมูลไม่ครบถ้วน
+                  {t('annIncomplete')}
                 </Text>
                 <Text style={[styles.modalLabel, styles.textCenterMb16, { color: colors.subtext }]}>
-                  กรุณากรอกข้อมูลต่อไปนี้:
+                  {t('annFillPrompt')}
                 </Text>
                 <View style={[styles.listBox, darkMode ? styles.bgDark33 : styles.bgWarningLight]}>
                   {missingFields.map((field, index) => (
@@ -521,7 +529,7 @@ const AnnouncementFormModal: React.FC<{
                   onPress={() => setWarningVisible(false)} 
                   style={[styles.modalBtn, styles.fullWidthBtnOrange]}
                 >
-                  <Text style={styles.modalSaveText}>ตกลง</Text>
+                  <Text style={styles.modalSaveText}>{t('ok')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -533,7 +541,8 @@ const AnnouncementFormModal: React.FC<{
   );
 };
 
-const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
+const AnnouncementAdmin: React.FC<{ darkMode: boolean; onDataChanged?: () => void }>= ({ darkMode, onDataChanged }) => {
+  const { t } = useI18n();
   const [items, setItems] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [roleLoading, setRoleLoading] = useState(true);
@@ -573,7 +582,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
       const token = await AsyncStorage.getItem('token');
       if (!token) { setRole('user'); return; }
       const res = await fetch(`${BASE_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error('โหลดสิทธิ์ไม่สำเร็จ');
+      if (!res.ok) throw new Error(t('annLoadPermFailed'));
       const me = await res.json();
       setRole((me?.role ?? 'user') as Role);
     } catch (e: any) {
@@ -582,7 +591,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
     } finally {
       setRoleLoading(false);
     }
-  }, [BASE_URL]);
+  }, [BASE_URL, t]);
 
   // load items
   const fetchItems = useCallback(async () => {
@@ -636,11 +645,11 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
         }
       }
     } catch (e: any) {
-      showAlert('เกิดข้อผิดพลาด', e?.message ?? 'โหลดข้อมูลล้มเหลว');
+      showAlert(t('error'), e?.message ?? t('annLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [BASE_URL, role, overdueNotified]);
+  }, [BASE_URL, role, overdueNotified, t]);
 
   useEffect(() => {
     fetchRole();
@@ -660,10 +669,10 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
     if (role !== 'admin' && role !== 'superadmin') return;
     
     setConfirmConfig({
-      title: 'ยืนยัน',
+      title: t('confirm'),
       message: item.important 
-        ? 'ต้องการยกเลิกสถานะประกาศสำคัญใช่หรือไม่?' 
-        : 'ต้องการตั้งเป็นประกาศสำคัญใช่หรือไม่?',
+        ? t('annConfirmRemoveImportant') 
+        : t('annConfirmSetImportant'),
       onConfirm: async () => {
         try {
           const token = await AsyncStorage.getItem('token');
@@ -672,16 +681,17 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
             body: JSON.stringify({ important: !item.important }),
           });
-          if (!res.ok) throw new Error('อัปเดตไม่สำเร็จ');
+          if (!res.ok) throw new Error(t('annUpdateFailed'));
           await res.json();
           await fetchItems();
+          onDataChanged?.();
         } catch (e: any) {
-          showAlert('ผิดพลาด', e?.message || 'อัปเดตสถานะประกาศสำคัญไม่สำเร็จ');
+          showAlert(t('error'), e?.message || t('annUpdImportantFailed'));
         }
       }
     });
     setConfirmVisible(true);
-  }, [BASE_URL, fetchItems, role]);
+  }, [BASE_URL, fetchItems, role, onDataChanged, t]);
 
   const toggleConfirm = () => {
     if (confirmConfig) {
@@ -705,11 +715,12 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
         },
         body: JSON.stringify({ title, date, image, important: !!important, description: description ?? '' }),
       });
-      if (!res.ok) throw new Error('เพิ่มไม่สำเร็จ');
+      if (!res.ok) throw new Error(t('annAddFailed'));
       await fetchItems();
+      onDataChanged?.();
       closeAdd();
     } catch (e: any) {
-      showAlert('เกิดข้อผิดพลาด', e?.message ?? 'เพิ่มข้อมูลล้มเหลว');
+      showAlert(t('error'), e?.message ?? t('annAddDataFailed'));
     } finally {
       setAddSaving(false);
     }
@@ -728,7 +739,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
   };
   // Success Modal State
   const [successVisible, setSuccessVisible] = useState(false);
-  const [successConfig, setSuccessConfig] = useState<{ title: string; message?: string; items?: string[] }>({ title: 'บันทึกสำเร็จ' });
+  const [successConfig, setSuccessConfig] = useState<{ title: string; message?: string; items?: string[] }>({ title: '' });
 
   const handleEditSave = async ({ title, date, image, important, description }: { title: string; date: string; image: string; important?: boolean; description?: string }) => {
     try {
@@ -737,11 +748,11 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
       
       // Calculate changes
       const changes: string[] = [];
-      if (title !== editItem.title) changes.push(`ชื่อประกาศ: ${editItem.title} -> ${title}`);
-      if (date !== editItem.date) changes.push(`วันที่: ${formatBeThai(editItem.date)} -> ${formatBeThai(date)}`);
-      if (image !== editItem.image) changes.push('รูปภาพ: มีการเปลี่ยนแปลง');
-      if (important !== editItem.important) changes.push(`สถานะสำคัญ: ${important ? 'เปิด' : 'ปิด'}`);
-      if (description !== editItem.description) changes.push('รายละเอียด: มีการเปลี่ยนแปลง');
+      if (title !== editItem.title) changes.push(t('annTitleChanged', { old: editItem.title, new: title }));
+      if (date !== editItem.date) changes.push(t('annDateChanged', { old: formatBeThai(editItem.date), new: formatBeThai(date) }));
+      if (image !== editItem.image) changes.push(t('annImageChanged'));
+      if (important !== editItem.important) changes.push(t('annImportantChanged', { status: important ? t('annImportantOn') : t('annImportantOff') }));
+      if (description !== editItem.description) changes.push(t('annDescChanged'));
 
       const token = await AsyncStorage.getItem('token');
       const res = await fetch(`${BASE_URL}/announcements/${editItem.id}`, {
@@ -752,19 +763,20 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
         },
         body: JSON.stringify({ title, date, image, important: important ?? editItem.important ?? false, description: description ?? editItem.description ?? '' }),
       });
-      if (!res.ok) throw new Error('แก้ไขไม่สำเร็จ');
+      if (!res.ok) throw new Error(t('annEditFailed'));
       await fetchItems();
+      onDataChanged?.();
       
       setSuccessConfig({
-        title: 'บันทึกสำเร็จ',
-        items: changes.length > 0 ? changes : ['ไม่มีการเปลี่ยนแปลงข้อมูล']
+        title: t('annSaveSuccess'),
+        items: changes.length > 0 ? changes : [t('annNoChanges')]
       });
       setEditVisible(false);
       setEditItem(null);
       setTimeout(() => setSuccessVisible(true), 300);
       
     } catch (e: any) {
-      showAlert('เกิดข้อผิดพลาด', e?.message ?? 'แก้ไขข้อมูลล้มเหลว');
+      showAlert(t('error'), e?.message ?? t('annEditDataFailed'));
     } finally {
       setEditSaving(false);
     }
@@ -775,8 +787,8 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
     if (role !== 'admin' && role !== 'superadmin') return;
     
     setConfirmConfig({
-      title: 'ลบประกาศ',
-      message: `ต้องการลบประกาศ "${item.title}" ใช่หรือไม่?`,
+      title: t('annDeleteTitle'),
+      message: t('annConfirmDeleteMsg', { title: item.title }),
       isDestructive: true,
       onConfirm: async () => {
         try {
@@ -785,22 +797,23 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
             method: 'DELETE',
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           });
-          if (!res.ok) throw new Error('ลบไม่สำเร็จ');
+          if (!res.ok) throw new Error(t('annDeleteFailed'));
           await fetchItems();
+          onDataChanged?.();
           
           setSuccessConfig({
-            title: 'ลบสำเร็จ',
-            message: `ลบประกาศ "${item.title}" เรียบร้อยแล้ว`
+            title: t('annDeleteSuccess'),
+            message: t('annDeletedMsg', { title: item.title })
           });
           setTimeout(() => setSuccessVisible(true), 300);
 
         } catch (e: any) {
-          showAlert('เกิดข้อผิดพลาด', e?.message ?? 'ลบข้อมูลล้มเหลว');
+          showAlert(t('error'), e?.message ?? t('annDeleteDataFailed'));
         }
       }
     });
     setConfirmVisible(true);
-  }, [role, BASE_URL, fetchItems]);
+  }, [role, BASE_URL, fetchItems, t, onDataChanged]);
 
   const renderItem = useCallback(({ item }: { item: AnnouncementItem }) => (
     <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.line }]}>
@@ -836,7 +849,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
               return (
                 <View style={styles.overdueBadge}>
                   <Ionicons name="alert-circle" size={12} color="#D32F2F" />
-                  <Text style={styles.overdueBadgeText}>เลยกำหนด</Text>
+                  <Text style={styles.overdueBadgeText}>{t('annOverdue')}</Text>
                 </View>
               );
             }
@@ -865,7 +878,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                 activeOpacity={0.7}
                 style={styles.selfStart}
               >
-                <Text style={styles.moreLessText}>{expanded[item.id] ? 'ย่อ' : 'อ่านต่อ...'}</Text>
+                <Text style={styles.moreLessText}>{expanded[item.id] ? t('collapse') : t('readMore')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -887,14 +900,14 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
         </View>
       )}
     </View>
-  ), [colors, expanded, measured, truncated, role, toggleImportant, handleDelete, openEdit, darkMode]);
+  ), [colors, expanded, measured, truncated, role, toggleImportant, handleDelete, openEdit, darkMode, t]);
 
   const renderHeader = useCallback(() => (
     <View style={[styles.header, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.headerTitle, { color: colors.text }]}>📢 ประกาศ</Text>
-      <Text style={[styles.headerSubtitle, { color: colors.subtext }]}>จัดการประกาศสำหรับผู้ดูแลระบบ</Text>
+      <Text style={[styles.headerTitle, { color: colors.text }]}>{t('annTitle')}</Text>
+      <Text style={[styles.headerSubtitle, { color: colors.subtext }]}>{t('annManage')}</Text>
     </View>
-  ), [colors]);
+  ), [colors, t]);
 
   const renderFooter = useCallback(() => (
     <View style={styles.footerSpacer} />
@@ -904,7 +917,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={COLORS.green} />
-        <Text style={[styles.loadingText, darkMode ? styles.colorWhite : styles.colorDark333]}>กำลังตรวจสอบสิทธิ์...</Text>
+        <Text style={[styles.loadingText, darkMode ? styles.colorWhite : styles.colorDark333]}>{t('annCheckingAuth')}</Text>
       </View>
     );
   }
@@ -950,7 +963,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
       {(role === 'admin' || role === 'superadmin') && (
         <TouchableOpacity style={styles.addButton} onPress={openAdd} activeOpacity={0.85}>
           <Ionicons name="add" size={22} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>เพิ่มประกาศ</Text>
+          <Text style={styles.addButtonText}>{t('annAddButton')}</Text>
         </TouchableOpacity>
       )}
 
@@ -967,12 +980,12 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                 
                 {/* Title */}
                 <Text style={[styles.overdueModalTitle, { color: colors.text }]}>
-                  ประกาศเลยกำหนด
+                  {t('annOverdueItems')}
                 </Text>
                 
                 {/* Count */}
                 <Text style={[styles.overdueModalSubtitle, { color: colors.subtext }]}>
-                  มี {overdueItems.length} รายการที่วันเลยกำหนดแล้ว
+                  {t('annOverdueCount', { n: String(overdueItems.length) })}
                 </Text>
                 
                 {/* List */}
@@ -992,7 +1005,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                   ))}
                   {overdueItems.length > 5 && (
                     <Text style={[styles.overdueMoreText, { color: colors.subtext }]}>
-                      และอีก {overdueItems.length - 5} รายการ...
+                      {t('annAndMore', { n: String(overdueItems.length - 5) })}
                     </Text>
                   )}
                 </View>
@@ -1002,7 +1015,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                   style={styles.overdueOkBtn}
                   onPress={() => setShowOverdueModal(false)}
                 >
-                  <Text style={styles.overdueOkBtnText}>ตกลง</Text>
+                  <Text style={styles.overdueOkBtnText}>{t('ok')}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -1024,7 +1037,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                     />
                   </View>
                   <Text style={[styles.modalTitle, styles.textCenterMb8, { color: colors.text }]}>
-                    {confirmConfig?.title || 'ยืนยัน'}
+                    {confirmConfig?.title || t('confirm')}
                   </Text>
                   <Text style={[styles.modalLabel, styles.textCenterMb24, { color: colors.subtext }]}>
                     {confirmConfig?.message}
@@ -1035,13 +1048,13 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                       onPress={() => setConfirmVisible(false)} 
                       style={[styles.modalBtn, styles.flex1NoMr, darkMode ? styles.bgDark33 : styles.bgLightF5]}
                     >
-                      <Text style={[styles.modalCancelText, { color: colors.text }]}>ยกเลิก</Text>
+                      <Text style={[styles.modalCancelText, { color: colors.text }]}>{t('cancel')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                       onPress={toggleConfirm} 
                       style={[styles.modalBtn, styles.flex1, confirmConfig?.isDestructive ? styles.bgRed : styles.bgGreen]}
                     >
-                      <Text style={styles.modalSaveText}>{confirmConfig?.isDestructive ? 'ลบ' : 'ยืนยัน'}</Text>
+                      <Text style={styles.modalSaveText}>{confirmConfig?.isDestructive ? t('delete') : t('confirm')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1068,7 +1081,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                   {successConfig.items ? (
                     <>
                       <Text style={[styles.modalLabel, styles.textCenterMb16, { color: colors.subtext }]}>
-                        รายการแก้ไข:
+                        {t('annEditChanges')}
                       </Text>
                       <View style={[styles.listBox, darkMode ? styles.bgDark33 : styles.bgSuccessLight]}>
                         {successConfig.items.map((log, index) => (
@@ -1089,7 +1102,7 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
                     onPress={() => setSuccessVisible(false)} 
                     style={[styles.modalBtn, styles.fullWidthBtnGreen]}
                   >
-                    <Text style={styles.modalSaveText}>ตกลง</Text>
+                    <Text style={styles.modalSaveText}>{t('ok')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1101,13 +1114,16 @@ const AnnouncementAdmin: React.FC<{ darkMode: boolean }>= ({ darkMode }) => {
   );
 };
 
-const EmptyState: React.FC<{ colors: any }> = ({ colors }) => (
-  <View style={styles.emptyContainer}>
-    <Ionicons name="megaphone-outline" size={64} color={colors.subtext} />
-    <Text style={[styles.emptyText, { color: colors.subtext }]}>ยังไม่มีประกาศ</Text>
-    <Text style={[styles.emptySubtext, { color: colors.subtext }]}>กดปุ่ม "เพิ่มประกาศ" เพื่อเริ่มต้น</Text>
-  </View>
-);
+const EmptyState: React.FC<{ colors: any }> = ({ colors }) => {
+  const { t } = useI18n();
+  return (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="megaphone-outline" size={64} color={colors.subtext} />
+      <Text style={[styles.emptyText, { color: colors.subtext }]}>{t('annNoItems')}</Text>
+      <Text style={[styles.emptySubtext, { color: colors.subtext }]}>{t('annPressAdd')}</Text>
+    </View>
+  );
+};
 
 export default AnnouncementAdmin;
 

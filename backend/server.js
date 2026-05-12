@@ -6,7 +6,6 @@ require('dotenv').config();
 const { HOST, PORT } = require('./src/config/env');
 const { buildApp } = require('./src/app');
 const { setupSocket } = require('./src/socket');
-const { scheduleQrCleanup } = require('./src/utils/qr');
 const { initDatabase } = require('./src/db/initDb');
 
 // Initialize database and start server
@@ -16,7 +15,13 @@ const { initDatabase } = require('./src/db/initDb');
 
   // Create app + server + socket.io
   const io = new Server({
-    cors: { origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'] }
+    cors: { origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'] },
+    transports: ['websocket', 'polling'],
+    pingInterval: 25000,
+    pingTimeout: 20000,
+    connectTimeout: 45000,
+    maxHttpBufferSize: 1e6,
+    perMessageDeflate: false,
   });
   const app = buildApp(io);
   const server = http.createServer(app);
@@ -24,9 +29,6 @@ const { initDatabase } = require('./src/db/initDb');
 
   // Socket handlers
   setupSocket(io);
-
-  // Background jobs
-  scheduleQrCleanup();
 
   // Start server
   server.listen(PORT, () => {

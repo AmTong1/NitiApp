@@ -1,5 +1,4 @@
-// PaymentScreen.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   StatusBar,
   View,
@@ -12,15 +11,17 @@ import {
   PermissionsAndroid,
   ScrollView,
   RefreshControl,
+  Modal,
 } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from '../components/GlobalAlert';
 import { launchImageLibrary, Asset } from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
-import Share from 'react-native-share';
-import { BASE_HOST, BASE_PORT } from './config.ts';
-const ANDROID_HOST = BASE_HOST;
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { BASE_HOST } from './config.ts';
+
 type QrResponse = {
   userId?: string;
   id: string;
@@ -28,14 +29,10 @@ type QrResponse = {
   payload: string;
   url?: string;
   filename?: string;
-
-  // ⬇️ เวลา/นับถอยหลังที่มาจาก Backend
-  createdAt?: string;      // ISO
-  expiresAt?: string;      // ISO
-  serverNow?: string;      // ISO (เวลาปัจจุบันฝั่งเซิร์ฟเวอร์ ตอนตอบ)
-  expiresInMs?: number;    // มิลลิวินาทีที่เหลือ ณ ตอนเซิร์ฟเวอร์ตอบ
-  countdownText?: string;  // รูปแบบข้อความนับถอยหลังที่ backend จัดมาแล้ว
-  retentionDays?: number;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  expiresInSeconds?: number;
+  expiresAfterMinutes?: number;
 };
 
 interface PaymentScreenProps {
@@ -44,65 +41,84 @@ interface PaymentScreenProps {
 }
 
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 }
 
-const BASE_URL = getBaseUrl();
-
 const USER_ID = 'user002';
-
-const STORAGE_KEY = `qr_user_${USER_ID}`;
 const AMOUNT_KEY = 'qr_amount';
 const INTENT_KEY = 'qr_intent_id';
 const INSTALLMENT_KEY = 'qr_installment_id';
-const SKEW_MS = 3000;
 
-const formatRemaining = (ms: number) => {
-  if (!Number.isFinite(ms) || ms <= 0) return '00:00';
-  const totalSec = Math.floor(ms / 1000);
-  const days = Math.floor(totalSec / 86400);
-  const hours = Math.floor((totalSec % 86400) / 3600);
-  const mins = Math.floor((totalSec % 3600) / 60);
-  const secs = totalSec % 60;
-  if (days > 0) return `${days}d ${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h ${mins}m ${secs.toString().padStart(2, '0')}s`;
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
+function buildQrStorageKey(
+  installmentId: string | null,
+  intentId: string | null,
+  amount: number | null,
+) {
+  const amountPart = Number.isFinite(amount as number) ? Number(amount).toFixed(2) : 'none';
+  return `qr_cache:${installmentId || 'none'}:${intentId || 'none'}:${amountPart}`;
+}
 
-// Used when booting from cache (serverNow/expiresInMs may be missing).
-const calcRemainingFromExpiresAt = (q?: QrResponse | null) => {
-  if (!q?.expiresAt) return null;
-  const t = new Date(q.expiresAt).getTime();
-  if (!Number.isFinite(t)) return null;
-  return Math.max(0, t - Date.now());
-};
+function normalizeQrUrl(rawUrl?: string) {
+  if (!rawUrl) return undefined;
+  const base = getBaseUrl();
+  const trimmed = String(rawUrl).trim();
+  if (!trimmed) return undefined;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const src = new URL(trimmed);
+      const dst = new URL(base);
+      if (src.host !== dst.host) {
+        return `${dst.protocol}//${dst.host}${src.pathname}${src.search}`;
+      }
+    } catch {
+      // keep original below
+    }
+    return trimmed;
+  }
+
+  return `${base}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+}
+
+function parseQrExpiryMs(qr?: QrResponse | null) {
+  if (!qr) return null;
+  const raw = (qr.expiresAt || '').trim();
+  if (!raw) return null;
+  const ms = new Date(raw).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return ms;
+}
+
+function formatSecondsToMmSs(totalSeconds: number) {
+  const sec = Math.max(0, Number(totalSeconds || 0));
+  const mm = Math.floor(sec / 60);
+  const ss = sec % 60;
+  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
 
 export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) {
   const [loading, setLoading] = useState(true);
   const [qr, setQr] = useState<QrResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // ⬇️ สำหรับนับถอยหลังโดยอิงเวลาจาก backend
-  const [countdown, setCountdown] = useState<string>('');
-  const [expired, setExpired] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [autoRefreshing, setAutoRefreshing] = useState<boolean>(false);
+  const [receiptImageUrl, setReceiptImageUrl] = useState<string | null>(null);
+  const [receiptModalVisible, setReceiptModalVisible] = useState<boolean>(false);
+  const [receiptDownloading, setReceiptDownloading] = useState<boolean>(false);
 
-  // baseRemainingMs = เวลาเหลือ (ms) ตอน "ขณะรับ response"
-  // clientFetchTs = เวลา client ตอน "ขณะรับ response"
-  const [baseRemainingMs, setBaseRemainingMs] = useState<number | null>(null);
-  const [clientFetchTs, setClientFetchTs] = useState<number | null>(null);
-
-  // สำหรับ amount ที่ส่งมาจากหน้า History
   const [initAmount, setInitAmount] = useState<number | null>(null);
   const [amountReady, setAmountReady] = useState(false);
 
-  // สำหรับ intentId ที่ส่งมาจากหน้า History
   const [installmentId, setInstallmentId] = useState<string | null>(null);
   const [intentId, setIntentId] = useState<string | null>(null);
 
-  // Dynamic colors based on darkMode
+  const storageKey = useMemo(
+    () => buildQrStorageKey(installmentId, intentId, initAmount),
+    [installmentId, intentId, initAmount],
+  );
+
   const colors = {
     bg: darkMode ? '#121212' : '#fff',
     text: darkMode ? '#FFFFFF' : '#333',
@@ -118,35 +134,43 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
 
   const bootFromStorage = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const cached: QrResponse = JSON.parse(raw);
+      const raw = await AsyncStorage.getItem(storageKey);
+      if (!raw) return false;
+      const cached = JSON.parse(raw) as QrResponse & { expires_at?: string; expires_in_seconds?: number };
+      const normalizedCached: QrResponse = {
+        ...cached,
+        url: normalizeQrUrl(cached.url),
+        expiresAt: cached.expiresAt || cached.expires_at || null,
+        expiresInSeconds: Number.isFinite(Number(cached.expiresInSeconds))
+          ? Number(cached.expiresInSeconds)
+          : (Number.isFinite(Number(cached.expires_in_seconds)) ? Number(cached.expires_in_seconds) : undefined),
+      };
 
-        // ถ้าเคยเก็บ expiresInMs ตอนนั้นไว้ด้วย (เผื่อคุณอยากเพิ่มเก็บเอง) ใช้ได้เลย
-        let remain = cached.expiresInMs ?? calcRemainingFromExpiresAt(cached);
-        if (remain != null && remain > SKEW_MS) {
-          setQr(cached);
-          setBaseRemainingMs(remain);
-          setClientFetchTs(Date.now()); // ตั้งฐานเทียบ ณ ตอนนี้
-          // ใช้ข้อความ countdown จาก backend ถ้ามี
-          setCountdown(cached.countdownText || formatRemaining(remain));
-          setExpired(remain <= 0);
-          setLoading(false);
-          return true;
-        }
+      const expiresAtMs = parseQrExpiryMs(normalizedCached);
+      if (!expiresAtMs || Date.now() >= expiresAtMs) {
+        await AsyncStorage.removeItem(storageKey);
+        return false;
       }
-    } catch {}
-    return false;
-  }, []);
 
-  // บูต: โหลด amount ที่ถูกส่งมาจากหน้า History แล้วค่อยปล่อยให้ fetch ได้
+      setQr(normalizedCached);
+      setLoading(false);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [storageKey]);
+
   useEffect(() => {
     (async () => {
       try {
         const rawAmt = await AsyncStorage.getItem(AMOUNT_KEY);
-        if (rawAmt != null && !Number.isNaN(Number(rawAmt))) setInitAmount(Number(rawAmt));
+        if (rawAmt != null && !Number.isNaN(Number(rawAmt))) {
+          setInitAmount(Number(rawAmt));
+        }
+
         const iid = await AsyncStorage.getItem(INSTALLMENT_KEY);
         if (iid) setInstallmentId(iid);
+
         const intent = await AsyncStorage.getItem(INTENT_KEY);
         if (intent) setIntentId(intent);
       } finally {
@@ -155,80 +179,55 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
     })();
   }, []);
 
-  // ดึง QR: เรียกจาก installment โดยตรง (ถ้ามี), ไม่งั้น fallback เดิม
-  const fetchQR = useCallback(async () => {
+  const fetchQR = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true);
       setError(null);
-      setExpired(false);
-      setCountdown('');
 
+      const baseUrl = getBaseUrl();
+      const token = await AsyncStorage.getItem('token');
       let url: string;
       if (installmentId) {
         const qs = new URLSearchParams();
         if (intentId) qs.set('intentId', intentId);
-        url = `${BASE_URL}/promptpay-qr/installment/${encodeURIComponent(installmentId)}${qs.toString() ? `?${qs}` : ''}`;
+        if (forceRefresh) qs.set('refresh', '1');
+        url = `${baseUrl}/promptpay-qr/installment/${encodeURIComponent(installmentId)}${qs.toString() ? `?${qs}` : ''}`;
       } else {
-        // fallback: เดิมอิง user และส่ง amount
         const qs = new URLSearchParams();
         if (typeof initAmount === 'number') qs.set('amount', String(initAmount));
         if (intentId) qs.set('intentId', intentId);
-        url = `${BASE_URL}/promptpay-qr/user/${USER_ID}${qs.toString() ? `?${qs}` : ''}`;
+        if (forceRefresh) qs.set('refresh', '1');
+        url = `${baseUrl}/promptpay-qr/user/${USER_ID}${qs.toString() ? `?${qs}` : ''}`;
       }
 
-      const res = await fetch(url, {
-        headers: { 'Cache-Control': 'no-cache' },
-      });
+      const headers: Record<string, string> = { 'Cache-Control': 'no-cache' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(url, { headers });
       const json = (await res.json()) as QrResponse & {
-        // เผื่อ backend ส่ง field เพิ่มเติมอื่น ๆ
+        message?: string;
+        expires_at?: string;
+        expires_in_seconds?: number;
       };
-      if (!res.ok) throw new Error((json as any)?.message || 'ไม่สามารถดึง QR ได้');
+      if (!res.ok) throw new Error(json?.message || 'อัปโหลดไม่สำเร็จ');
 
-      // คำนวณฐานเวลาโดยเชื่อค่า server เป็นหลัก
-      // 1) ถ้ามี expiresInMs จาก backend → ใช้เลย
-      // 2) ถ้าไม่มี → ใช้ (expiresAt - serverNow) ถ้ามีครบ
-      // 3) ถ้าไม่มีอีก → ใช้ (expiresAt - Date.now()) เป็น fallback
-      let remainMs: number | null = null;
+      const normalized: QrResponse = {
+        ...json,
+        url: normalizeQrUrl(json.url),
+        expiresAt: json.expiresAt || json.expires_at || null,
+        expiresInSeconds: Number.isFinite(Number(json.expiresInSeconds))
+          ? Number(json.expiresInSeconds)
+          : (Number.isFinite(Number(json.expires_in_seconds)) ? Number(json.expires_in_seconds) : undefined),
+      };
 
-      if (Number.isFinite(json.expiresInMs as number)) {
-        remainMs = Number(json.expiresInMs);
-      } else if (json.expiresAt && json.serverNow) {
-        const exp = new Date(json.expiresAt).getTime();
-        const srv = new Date(json.serverNow).getTime();
-        if (Number.isFinite(exp) && Number.isFinite(srv)) {
-          remainMs = Math.max(0, exp - srv);
-        }
-      } else if (json.expiresAt) {
-        const exp = new Date(json.expiresAt).getTime();
-        if (Number.isFinite(exp)) {
-          remainMs = Math.max(0, exp - Date.now());
-        }
-      }
-
-      // เก็บค่าไว้ใช้ใน UI
-      setQr(json);
-      setBaseRemainingMs(remainMs);
-      setClientFetchTs(Date.now());
-
-      // ตั้งค่าข้อความเริ่มต้น
-      if (Number.isFinite(remainMs as number)) {
-        setCountdown(json.countdownText || formatRemaining(remainMs as number));
-        setExpired((remainMs as number) <= 0);
-      } else {
-        setCountdown(json.countdownText || '');
-        setExpired(false);
-      }
-
-      // เก็บแคช (รวมฟิลด์เวลาที่ backend ส่งมา)
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+      setQr(normalized);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(normalized));
     } catch (e: any) {
-      setError(e?.message || 'เกิดข้อผิดพลาด');
+      setError(e?.message || 'ไม่สามารถโหลดข้อมูล QR ได้');
     } finally {
       setLoading(false);
     }
-  }, [installmentId, intentId, initAmount]);
+  }, [installmentId, intentId, initAmount, storageKey]);
 
-  // เมื่อพร้อมค่าใน storage แล้วค่อยเรียก
   useEffect(() => {
     if (!amountReady) return;
     (async () => {
@@ -237,36 +236,110 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
     })();
   }, [amountReady, bootFromStorage, fetchQR]);
 
-  // นับถอยหลัง โดยเทียบจาก baseRemainingMs และเวลาที่ผ่านไปบน client
   useEffect(() => {
-    if (!Number.isFinite(baseRemainingMs as number) || !Number.isFinite(clientFetchTs as number)) {
-      // ไม่มีฐานเวลา ก็ไม่ตั้ง interval
-      return;
-    }
-    const start = clientFetchTs as number;
-    const base = baseRemainingMs as number;
-
-    const tick = () => {
-      const elapsed = Date.now() - start;
-      const remaining = Math.max(0, base - elapsed);
-      setCountdown(formatRemaining(remaining));
-      setExpired(remaining <= 0);
+    const updateLeft = () => {
+      const expiresAtMs = parseQrExpiryMs(qr);
+      if (!expiresAtMs) {
+        setSecondsLeft(null);
+        return;
+      }
+      const left = Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000));
+      setSecondsLeft(left);
     };
 
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, [baseRemainingMs, clientFetchTs]);
+    updateLeft();
+    const timer = setInterval(updateLeft, 1000);
+    return () => clearInterval(timer);
+  }, [qr]);
+
+  useEffect(() => {
+    if (secondsLeft !== 0) return;
+    if (autoRefreshing || loading) return;
+
+    (async () => {
+      setAutoRefreshing(true);
+      try {
+        await fetchQR(true);
+      } finally {
+        setAutoRefreshing(false);
+      }
+    })();
+  }, [secondsLeft, autoRefreshing, loading, fetchQR]);
+
+  const ensureGalleryPermission = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      if (Platform.Version <= 28) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          {
+            title: 'ต้องการสิทธิ์จัดเก็บข้อมูล',
+            message: 'กรุณาอนุญาตเพื่อบันทึกรูปลงแกลเลอรี',
+            buttonNeutral: 'ภายหลัง',
+            buttonNegative: 'ยกเลิก',
+            buttonPositive: 'อนุญาต',
+          },
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+
+      if (Platform.Version >= 33 && PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          {
+            title: 'ต้องการสิทธิ์รูปภาพ',
+            message: 'กรุณาอนุญาตเพื่อบันทึกรูปลงแกลเลอรี',
+            buttonNeutral: 'ภายหลัง',
+            buttonNegative: 'ยกเลิก',
+            buttonPositive: 'อนุญาต',
+          },
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+    }
+    return true;
+  }, []);
+
+  const downloadImageToGallery = useCallback(async (remoteUrl: string, filePrefix: string) => {
+    const normalizedUrl = normalizeQrUrl(remoteUrl);
+    if (!normalizedUrl) {
+      throw new Error('IMAGE_URL_INVALID');
+    }
+
+    const hasPermission = await ensureGalleryPermission();
+    if (!hasPermission) {
+      throw new Error('STORAGE_PERMISSION_DENIED');
+    }
+
+    const token = await AsyncStorage.getItem('token');
+    const filename = `${filePrefix}_${Date.now()}.png`;
+    const filePath = `${RNFS.CachesDirectoryPath}/${filename}`;
+
+    try {
+      const download = await RNFS.downloadFile({
+        fromUrl: normalizedUrl,
+        toFile: filePath,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }).promise;
+
+      if (!download || download.statusCode !== 200) {
+        throw new Error('IMAGE_DOWNLOAD_FAILED');
+      }
+
+      const localPathForSave = Platform.OS === 'android' ? filePath : `file://${filePath}`;
+      await CameraRoll.save(localPathForSave, { type: 'photo', album: 'MyApp' });
+      return filename;
+    } catch {
+      await CameraRoll.save(normalizedUrl, { type: 'photo', album: 'MyApp' });
+      return filename;
+    }
+  }, [ensureGalleryPermission]);
 
   const onConfirm = async () => {
-    if (expired) {
-      showAlert('หมดเวลา', 'QR หมดอายุแล้ว โปรดกด Reload เพื่อสร้าง QR ใหม่');
-      return;
-    }
     try {
       const res = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1 });
       if (res.didCancel) return;
       if (res.errorCode) return showAlert('เลือกไฟล์ไม่สำเร็จ', res.errorMessage || res.errorCode);
+
       const asset = res.assets?.[0] as Asset | undefined;
       if (!asset?.uri) return showAlert('ไม่พบไฟล์สำหรับอัปโหลด');
 
@@ -278,8 +351,15 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
         name: asset.fileName || `slip_${Date.now()}.jpg`,
         type: asset.type || 'image/jpeg',
       });
+      if (intentId) form.append('intentId', String(intentId));
+      if (qr?.amount != null && Number.isFinite(Number(qr.amount))) {
+        form.append('amount', String(Number(qr.amount)));
+      }
+      if (qr?.filename) {
+        form.append('qrFilename', String(qr.filename));
+      }
 
-      const response = await fetch(`${BASE_URL}/upload-and-check`, {
+      const response = await fetch(`${getBaseUrl()}/upload-and-check`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -289,11 +369,43 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
       });
 
       const json = await response.json();
-      if (!response.ok) throw new Error(json?.message || 'อัปโหลดไม่สำเร็จ');
+      if (!response.ok) {
+        if (json?.code === 'INTENT_EXPIRED') {
+          await fetchQR(true);
+        }
+        throw new Error(json?.message || 'อัปโหลดไม่สำเร็จ');
+      }
 
+      const receiptUrl = normalizeQrUrl(
+        json?.receiptImage?.url || json?.receipt?.url || json?.receipt_image_url,
+      );
+
+      if (receiptUrl) {
+        setReceiptImageUrl(receiptUrl);
+        setReceiptModalVisible(true);
+
+        try {
+          setReceiptDownloading(true);
+          await downloadImageToGallery(receiptUrl, 'bank_slip');
+          showAlert('ชำระเงินสำเร็จ', 'ตรวจสอบสลิปแล้ว และบันทึกรูปใบเสร็จลงแกลเลอรีเรียบร้อย');
+        } catch (saveErr: any) {
+          if (saveErr?.message === 'STORAGE_PERMISSION_DENIED') {
+            showAlert('ชำระเงินสำเร็จ', 'ตรวจสอบสลิปแล้ว แต่ไม่สามารถบันทึกรูปได้เพราะไม่ได้รับสิทธิ์จัดเก็บข้อมูล');
+          } else {
+            showAlert('ชำระเงินสำเร็จ', 'ตรวจสอบสลิปแล้ว แต่บันทึกรูปอัตโนมัติไม่สำเร็จ กรุณากดดาวน์โหลดอีกครั้ง');
+          }
+        } finally {
+          setReceiptDownloading(false);
+        }
+        return;
+      }
+
+      const providerResult = json?.slip2go ?? json?.slipok;
       const result =
-        typeof json?.slipok === 'object' ? JSON.stringify(json.slipok, null, 2) : String(json?.slipok);
-      showAlert('อัปโหลดสำเร็จ', `สลิปตรวจสอบแล้ว:\n${result}`);
+        typeof providerResult === 'object'
+          ? JSON.stringify(providerResult, null, 2)
+          : String(providerResult);
+      showAlert('อัปโหลดสำเร็จ', `ตรวจสอบสลิปแล้ว:\n${result}`);
     } catch (err: any) {
       showAlert('ผิดพลาด', err?.message || 'เกิดข้อผิดพลาด');
     } finally {
@@ -301,65 +413,68 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
     }
   };
 
-  // บันทึก/แชร์ไฟล์ QR ลงเครื่อง
- const onSaveQr = async () => {
-  if (!qr?.url) {
-    showAlert('ไม่พบ QR', 'ไม่พบ QR สำหรับบันทึก');
-    return;
-  }
-  try {
-    // ===== Permission เฉพาะ Android API <= 28 (Android 9 ลงไป) =====
-    if (Platform.OS === 'android' && Platform.Version <= 28) {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        {
-          title: 'ต้องการสิทธิ์จัดเก็บไฟล์',
-          message: 'แอปต้องการสิทธิ์เพื่อบันทึก QR ลงในคลังรูปภาพของคุณ',
-          buttonNeutral: 'ภายหลัง',
-          buttonNegative: 'ยกเลิก',
-          buttonPositive: 'อนุญาต',
-        }
-      );
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-        showAlert('ปฏิเสธสิทธิ์', 'ไม่สามารถบันทึกได้เนื่องจากไม่ได้รับสิทธิ์');
-        return;
-      }
+  const onSaveQr = async () => {
+    const downloadUrl = normalizeQrUrl(qr?.url);
+    if (!downloadUrl) {
+      showAlert('ไม่พบ QR', 'ไม่พบรูป QR สำหรับบันทึก');
+      return;
     }
 
-      const filename = `qrcode_${Date.now()}.png`;
-      const path = `${RNFS.CachesDirectoryPath}/${filename}`;
-
-      const download = await RNFS.downloadFile({
-        fromUrl: qr.url, // url จาก backend
-        toFile: path,
-      }).promise;
-
-      if (!download || download.statusCode !== 200) {
-        throw new Error('ไม่สามารถดาวน์โหลด QR ได้');
-      }
-
-      await Share.open({
-        url: 'file://' + path,
-        type: 'image/png',
-        failOnCancel: false,
-      });
+    try {
+      await downloadImageToGallery(downloadUrl, 'qrcode');
+      showAlert('บันทึกสำเร็จ', 'บันทึกรูป QR ลงแกลเลอรีแล้ว');
     } catch (err: any) {
-      showAlert('ผิดพลาด', err?.message || 'บันทึกไม่สำเร็จ');
+      if (err?.message === 'STORAGE_PERMISSION_DENIED') {
+        showAlert('ไม่ได้รับสิทธิ์', 'ต้องอนุญาตสิทธิ์จัดเก็บข้อมูลเพื่อบันทึกรูป');
+        return;
+      }
+      showAlert('ผิดพลาด', err?.message || 'เกิดข้อผิดพลาด');
     }
   };
 
+  const onSaveReceipt = useCallback(async () => {
+    if (!receiptImageUrl || receiptDownloading) return;
+    try {
+      setReceiptDownloading(true);
+      await downloadImageToGallery(receiptImageUrl, 'bank_slip');
+      showAlert('บันทึกสำเร็จ', 'บันทึกรูปใบเสร็จลงแกลเลอรีแล้ว');
+    } catch (err: any) {
+      if (err?.message === 'STORAGE_PERMISSION_DENIED') {
+        showAlert('ไม่ได้รับสิทธิ์', 'ต้องอนุญาตสิทธิ์จัดเก็บข้อมูลเพื่อบันทึกรูป');
+        return;
+      }
+      showAlert('ผิดพลาด', err?.message || 'เกิดข้อผิดพลาด');
+    } finally {
+      setReceiptDownloading(false);
+    }
+  }, [receiptImageUrl, receiptDownloading, downloadImageToGallery]);
+
+  const expiryText = useMemo(() => {
+    if (secondsLeft == null) return '-';
+    return formatSecondsToMmSs(secondsLeft);
+  }, [secondsLeft]);
+
+  const canManualRefresh = useMemo(() => {
+    if (secondsLeft == null) return false;
+    return secondsLeft < 60;
+  }, [secondsLeft]);
+
   const onRefresh = useCallback(async () => {
+    if (!canManualRefresh) {
+      return;
+    }
+
     setRefreshing(true);
     try {
-      await fetchQR();
+      await fetchQR(true);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchQR]);
+  }, [canManualRefresh, fetchQR]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={['left', 'right', 'bottom']}>
-      <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} backgroundColor={colors.bg} />
+      <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />
       <ScrollView
         style={[styles.container, { backgroundColor: colors.bg }]}
         contentContainerStyle={styles.scrollContent}
@@ -372,14 +487,12 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
           />
         }
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={[styles.logoContainer, { backgroundColor: colors.primary }]}>
-            <Text style={styles.logoText}>THAI QR{'\n'}PAYMENT</Text>
+            <Text style={styles.logoText}>THAI QR{`\n`}PAYMENT</Text>
           </View>
         </View>
 
-        {/* QR Code Container */}
         <View style={styles.qrContainer}>
           <View style={[styles.qrBox, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
             {loading ? (
@@ -394,12 +507,11 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
           </View>
         </View>
 
-        {/* Amount and Time Info */}
         <View style={styles.infoContainer}>
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.text }]}>ยอดรวมทั้งหมด</Text>
+            <Text style={[styles.infoLabel, { color: colors.text }]}>ยอดที่ต้องชำระ</Text>
             {(() => {
-              const displayAmount = (qr?.amount ?? initAmount);
+              const displayAmount = qr?.amount ?? initAmount;
               return (
                 <Text style={[styles.amountText, { color: colors.text }]}>
                   THB {displayAmount != null ? Number(displayAmount).toFixed(2) : '-'}
@@ -408,57 +520,92 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
             })()}
           </View>
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.text }]}>เวลาที่เหลือ</Text>
-            <Text style={[styles.timeText, { color: expired ? colors.danger : colors.success }]}>
-              {countdown || (expired ? '00:00' : '--:--')}
+            <Text style={[styles.infoLabel, { color: colors.text }]}>เวลาคงเหลือ</Text>
+            <Text style={[styles.amountText, { color: colors.danger }]}>
+              {expiryText}
             </Text>
           </View>
+          {autoRefreshing && (
+            <Text style={[styles.expireHint, { color: colors.info }]}>QR expired. Regenerating automatically...</Text>
+          )}
         </View>
 
-        {/* Upload Button */}
         <TouchableOpacity
           style={[
             styles.uploadButton,
             { backgroundColor: colors.success },
-            (expired || loading || !!error || uploading) && { backgroundColor: colors.disabled },
+            (loading || !!error || uploading) && { backgroundColor: colors.disabled },
           ]}
           onPress={onConfirm}
-          disabled={!!error || loading || expired || uploading}
+          disabled={!!error || loading || uploading}
         >
           <Text style={styles.uploadButtonText}>
-            {expired
-              ? 'หมดเวลา – กด Reload'
-              : loading
-              ? 'กำลังโหลด...'
-              : uploading
-              ? 'กำลังอัปโหลด...'
-              : 'อัปโหลดสลิป'}
+            {loading ? 'กำลังโหลด...' : uploading ? 'กำลังอัปโหลด...' : 'อัปโหลดสลิป'}
           </Text>
         </TouchableOpacity>
 
-        {/* Save QR */}
         <TouchableOpacity
           style={[
-            styles.saveButton, 
+            styles.saveButton,
             { backgroundColor: colors.info },
-            (!qr?.url || expired) && { backgroundColor: colors.disabled }
+            !qr?.url && { backgroundColor: colors.disabled },
           ]}
           onPress={onSaveQr}
-          disabled={!qr?.url || expired}
+          disabled={!qr?.url}
         >
-          <Text style={styles.uploadButtonText}>บันทึก QR Code</Text>
+          <Text style={styles.uploadButtonText}>Save QR Code</Text>
         </TouchableOpacity>
 
-        {/* Back to history */}
         {onBack && (
-          <TouchableOpacity
-            style={[styles.saveButton, styles.backButton]}
-            onPress={onBack}
-          >
-            <Text style={styles.uploadButtonText}>กลับไปประวัติ</Text>
+          <TouchableOpacity style={[styles.saveButton, styles.backButton]} onPress={onBack}>
+            <Text style={styles.uploadButtonText}>กลับ</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      <Modal
+        visible={receiptModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReceiptModalVisible(false)}
+      >
+        <View style={styles.receiptBackdrop}>
+          <View style={[styles.receiptModalCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <Text style={[styles.receiptTitle, { color: colors.text }]}>BANK SLIP</Text>
+            <View style={[styles.receiptImageWrap, { borderColor: colors.border }]}> 
+              {receiptImageUrl ? (
+                <Image source={{ uri: receiptImageUrl }} style={styles.receiptImagePreview} resizeMode="contain" />
+              ) : (
+                <Text style={{ color: colors.subtext }}>Receipt image is not available.</Text>
+              )}
+            </View>
+
+            <View style={styles.receiptActionRow}>
+              <TouchableOpacity
+                style={[
+                  styles.receiptBtnPrimary,
+                  (!receiptImageUrl || receiptDownloading) && styles.receiptBtnDisabled,
+                ]}
+                onPress={onSaveReceipt}
+                disabled={!receiptImageUrl || receiptDownloading}
+              >
+                {receiptDownloading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.receiptBtnText}>Download Image</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.receiptBtnSecondary}
+                onPress={() => setReceiptModalVisible(false)}
+              >
+                <Text style={styles.receiptBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -466,99 +613,161 @@ export default function PaymentScreen({ darkMode, onBack }: PaymentScreenProps) 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: wp('3%'),
   },
   container: {
     flex: 1,
-    borderRadius: 12,
-    paddingHorizontal: 40,
-    paddingTop: 35,
+    borderRadius: wp('3%'),
+    paddingHorizontal: wp('8%'),
+    paddingTop: hp('4.5%'),
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: hp('5%'),
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: hp('3.8%'),
   },
   logoContainer: {
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    borderRadius: wp('2%'),
+    paddingVertical: hp('1%'),
+    paddingHorizontal: wp('4%'),
   },
   logoText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: wp('3%'),
     fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: wp('4%'),
   },
   qrContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: hp('5%'),
   },
   qrBox: {
-    width: 280,
-    height: 280,
-    borderRadius: 12,
+    width: wp('70%'),
+    height: wp('70%'),
+    borderRadius: wp('3%'),
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qrImage: {
-    width: 260,
-    height: 260,
-    borderRadius: 8,
+    width: wp('65%'),
+    height: wp('65%'),
+    borderRadius: wp('2%'),
   },
   errorText: {
-    fontSize: 14,
+    fontSize: wp('3.5%'),
     textAlign: 'center',
   },
   noDataText: {
-    fontSize: 14,
+    fontSize: wp('3.5%'),
     textAlign: 'center',
   },
   infoContainer: {
-    marginBottom: 40,
+    marginBottom: hp('5%'),
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: hp('1.5%'),
   },
   infoLabel: {
-    fontSize: 16,
+    fontSize: wp('4%'),
     fontWeight: '400',
   },
   amountText: {
-    fontSize: 16,
+    fontSize: wp('4%'),
     fontWeight: '600',
   },
-  timeText: {
-    fontSize: 16,
-    color: '#00C851',
-    fontWeight: '600',
+  expireHint: {
+    marginTop: hp('0.8%'),
+    fontSize: wp('3.2%'),
   },
   uploadButton: {
-    borderRadius: 25,
-    paddingVertical: 15,
+    borderRadius: wp('6%'),
+    paddingVertical: hp('1.9%'),
     alignItems: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: wp('5%'),
   },
   saveButton: {
-    borderRadius: 25,
-    paddingVertical: 15,
+    borderRadius: wp('6%'),
+    paddingVertical: hp('1.9%'),
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginTop: 12,
+    marginHorizontal: wp('5%'),
+    marginTop: hp('1.5%'),
   },
   backButton: {
     backgroundColor: '#9E9E9E',
   },
   uploadButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: wp('4%'),
     fontWeight: '700',
-},
+  },
+  receiptBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: wp('5%'),
+  },
+  receiptModalCard: {
+    width: '100%',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  receiptTitle: {
+    fontSize: wp('5%'),
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  receiptImageWrap: {
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    height: hp('52%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0B1020',
+  },
+  receiptImagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  receiptActionRow: {
+    flexDirection: 'row',
+    marginTop: 14,
+  },
+  receiptBtnPrimary: {
+    flex: 1,
+    backgroundColor: '#0EA5E9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptBtnSecondary: {
+    flex: 1,
+    marginLeft: 10,
+    backgroundColor: '#64748B',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptBtnDisabled: {
+    opacity: 0.5,
+  },
+  receiptBtnText: {
+    color: '#FFFFFF',
+    fontSize: wp('3.8%'),
+    fontWeight: '700',
+  },
 });
+
+

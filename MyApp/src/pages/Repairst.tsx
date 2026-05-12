@@ -1,18 +1,18 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  Modal, TextInput, Platform, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator,
   StatusBar, Image,
-  ScrollView, Keyboard, Animated, PermissionsAndroid
+  ScrollView, Keyboard, Animated, Platform
 } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from '../components/GlobalAlert';
-import { BASE_HOST, BASE_PORT } from './config.ts';
-import { launchImageLibrary, launchCamera, Asset } from 'react-native-image-picker';
+import { useI18n } from '../i18n';
+import { BASE_HOST } from './config.ts';
+import { launchImageLibrary, Asset } from 'react-native-image-picker';
+import RepairCameraModal from '../components/RepairCameraModal';
 import ImageResizer from 'react-native-image-resizer';
-
-const ANDROID_HOST = BASE_HOST;
 
 type Repair = {
   id: number;
@@ -40,9 +40,17 @@ type Me = {
 interface RepairScreenProps { darkMode?: boolean; }
 
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 }
+
+const REPAIR_TITLE_MAX_LENGTH = 160;
+const REPAIR_DETAIL_MAX_LENGTH = 2000;
+const REPAIR_DELETE_REASON_MAX_LENGTH = 400;
+
+const waitForKeyboardToSettleBeforeMedia = async () => {
+  Keyboard.dismiss();
+  await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'android' ? 320 : 120));
+};
 
 const normalizeUrl = (u?: string | null): string => {
   if (!u) return '';
@@ -86,14 +94,14 @@ const expandSearchIds = (raw: string): number[] => {
   return Array.from(new Set(ids));
 };
 
-// ---------- helper: สร้าง timestamp + เตรียมไฟล์ย่อรูป ----------
+// ---------- helper: สร้าง timestamp + เน€เธ•รียมไฟล์ย่อรูป ----------
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const buildTimestamp = (d = new Date()) =>
   `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}_${pad2(d.getHours())}-${pad2(d.getMinutes())}-${pad2(d.getSeconds())}`;
 
 /**
- * ย่อรูปให้ยาวสุด 1600px, JPEG คุณภาพ 82% และตั้งชื่อไฟล์ตามรูปแบบ
- * คืนค่าเป็น { uri, name, type } พร้อมอัปโหลดได้ใน FormData
+ * เธขเนเธญเธฃเธนเธเนเธซเนเธขเธฒเธงเธชเธธเธ” 1600px, JPEG เธเธธเธ“เธ าพ 82% เนเธฅเธฐเธ•เธฑเนเธเธเธทเนเธญเนเธเธฅเนเธ•ามรูปแบบ
+ * เธเธทเธเธเนเธฒเน€ป็น { uri, name, type } เธเธฃเนเธญเธกเธญเธฑเธเนเธซเธฅเธ”เนเธ”้ใน FormData
  */
 async function prepareUploadFile(
   raw: Asset,
@@ -104,13 +112,13 @@ async function prepareUploadFile(
   const fileName = `user_${safeUser}_${stamp}.jpg`;
   const type = 'image/jpeg';
 
-  // ถ้าไม่มี uri ก็โยน error
+  // เธ–้าไม่มี uri ก็โยน error
   if (!raw.uri) {
     throw new Error('ไม่พบไฟล์รูปที่จะอัปโหลด');
   }
 
   try {
-    // resize แบบ contain ให้ด้านยาวสุดไม่เกิน 1600
+    // resize แบบ contain เนเธซเนเธ”เนเธฒเธเธขเธฒเธงเธชเธธเธ”เนเธกเนเน€กิน 1600
     const resized = await ImageResizer.createResizedImage(
       raw.uri,
       1600,
@@ -122,11 +130,11 @@ async function prepareUploadFile(
       false,
       { mode: 'contain' }
     );
-    // Android มักได้ path / iOS ได้ uri
+    // Android เธกเธฑเธเนเธ”้ path / iOS เนเธ”้ uri
     const uri = resized.uri || `file://${resized.path}`;
     return { uri, name: fileName, type };
   } catch {
-    // fallback: ใช้ไฟล์เดิม (อาจใหญ่กว่า)
+    // fallback: เนเธเนเนเธเธฅเนเน€เธ”เธดเธก (อาจใหญ่กว่า)
     return {
       uri: raw.uri!,
       name: fileName,
@@ -135,7 +143,7 @@ async function prepareUploadFile(
   }
 }
 
-// ---------- AddRepairModal (ย้ายออกมานอก RepairScreen เพื่อป้องกัน re-create) ----------
+// ---------- AddRepairModal (ย้ายออกมานอก RepairScreen เน€พื่อป้องกัน re-create) ----------
 const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors, uploadProgress, uploadNote, uploadBusy, isAdmin, myHouseNumber, getToken, showSuccess, successOpacity }: {
   visible: boolean;
   onClose: () => void;
@@ -152,16 +160,18 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
   successOpacity: Animated.Value;
 }) => {
   const [localTitle, setLocalTitle] = useState('');
+  const { t } = useI18n();
   const [localDetail, setLocalDetail] = useState('');
   const [localHouseNumber, setLocalHouseNumber] = useState('');
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState<string | null>(null);
+  const [cameraVisible, setCameraVisible] = useState(false);
   
   // Autocomplete state
   const [allHouses, setAllHouses] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [houseValid, setHouseValid] = useState<boolean | null>(null); // null = ยังไม่ตรวจ, true = valid, false = invalid
+  const [houseValid, setHouseValid] = useState<boolean | null>(null); // null = เธขเธฑเธเนเธกเนเธ•รวจ, true = valid, false = invalid
   
   // Warning Modal State
   const [warningVisible, setWarningVisible] = useState(false);
@@ -223,31 +233,11 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
 
   const MAX_PHOTOS = 5;
 
-  const requestCameraPermission = async (): Promise<boolean> => {
-    if (Platform.OS !== 'android') return true;
-    
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-        {
-          title: 'ขออนุญาตใช้กล้อง',
-          message: 'แอปต้องการใช้กล้องเพื่อถ่ายรูปในการแจ้งซ่อม',
-          buttonNeutral: 'ถามภายหลัง',
-          buttonNegative: 'ไม่อนุญาต',
-          buttonPositive: 'อนุญาต',
-        }
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.warn('Camera permission error:', err);
-      return false;
-    }
-  };
-
   const pickFromLibrary = async () => {
     if (isPickingImage) return;
     setIsPickingImage(true);
     try {
+      await waitForKeyboardToSettleBeforeMedia();
       console.log('Launching image library...');
       const result = await launchImageLibrary({
         mediaType: 'photo',
@@ -262,7 +252,7 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
       }
       if (result.errorCode) {
         console.log('Image picker error:', result.errorCode, result.errorMessage);
-        showAlert('เกิดข้อผิดพลาด', result.errorMessage || 'ไม่สามารถเลือกรูปได้');
+        showAlert(t('repairError'), result.errorMessage || t('repairCannotChooseImage'));
         return;
       }
       if (!result.assets || result.assets.length === 0) {
@@ -276,48 +266,31 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
       }
     } catch (e) {
       console.log('pickFromLibrary error:', e);
-      showAlert('เกิดข้อผิดพลาด', 'ไม่สามารถเลือกรูปได้');
+      showAlert(t('repairError'), t('repairCannotChooseImage'));
     } finally {
       setIsPickingImage(false);
     }
   };
 
-  const takeFromCamera = async () => {
-    if (isPickingImage) return;
-    
-    // ขอ permission กล้องก่อน
-    const hasPermission = await requestCameraPermission();
-    if (!hasPermission) {
-      showAlert('ไม่ได้รับอนุญาต', 'กรุณาอนุญาตการใช้กล้องในการตั้งค่า');
-      return;
+  const openCamera = async () => {
+    if (isPickingImage || assets.length >= MAX_PHOTOS) return;
+    await waitForKeyboardToSettleBeforeMedia();
+    setCameraVisible(true);
+  };
+
+  const onCameraCapture = (asset: Asset) => {
+    if (asset.uri) {
+      setAssets(prev => [...prev, asset].slice(0, MAX_PHOTOS));
     }
-    
-    setIsPickingImage(true);
-    try {
-      const result = await launchCamera({
-        mediaType: 'photo',
-        quality: 0.8,
-        includeExtra: false,
-        saveToPhotos: true,
-      });
-      if (result.didCancel || !result.assets) return;
-      const list = (result.assets || []).filter(a => a.uri);
-      if (list.length > 0) {
-        setAssets(prev => [...prev, ...list].slice(0, MAX_PHOTOS));
-      }
-    } catch (e) {
-      console.log('takeFromCamera error:', e);
-    } finally {
-      setIsPickingImage(false);
-    }
+    setCameraVisible(false);
   };
 
   const removeAt = (idx: number) => setAssets(prev => prev.filter((_, i) => i !== idx));
   
   const handleSave = () => {
     const missing: string[] = [];
-    if (!localTitle.trim()) missing.push('หัวข้อแจ้งซ่อม');
-    if (isAdmin && !localHouseNumber.trim()) missing.push('บ้านเลขที่');
+    if (!localTitle.trim()) missing.push(t('repairMissingTitle'));
+    if (isAdmin && !localHouseNumber.trim()) missing.push(t('repairMissingHouseNumber'));
 
     if (missing.length > 0) {
       setMissingFields(missing);
@@ -338,7 +311,7 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
 
           {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>แจ้งซ่อมใหม่</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('repairNewRepair')}</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose} disabled={isDisabled}>
               <Ionicons name="close" size={24} color={colors.subtext} />
             </TouchableOpacity>
@@ -351,17 +324,17 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* แสดงฟิลด์บ้านเลขที่สำหรับ admin (แก้ไขได้) */}
+            {/* เนเธชเธ”เธเธเธดเธฅเธ”เนเธเนเธฒเธเน€เธฅเธเธ—ี่สำหรับ admin (เนเธเนเนเธเนเธ”้) */}
             {isAdmin && (
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>บ้านเลขที่ *</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>{t('repairHouseNumberRequired')}</Text>
                 <TextInput
                   style={[
                     styles.textInput,
                     { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text },
                     houseValid === false && styles.houseInputError,
                   ]}
-                  placeholder="ระบุบ้านเลขที่ (ตัวเลขเท่านั้น)"
+                  placeholder={t('repairHouseNumberPlaceholder')}
                   placeholderTextColor={colors.subtext}
                   value={localHouseNumber}
                   onChangeText={(text) => setLocalHouseNumber(text.replace(/[^0-9]/g, ''))}
@@ -386,26 +359,26 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
                 {/* Error message */}
                 {houseValid === false && localHouseNumber.trim().length > 0 && (
                   <Text style={styles.validationError}>
-                    ❌ ไม่พบบ้านเลขที่ "{localHouseNumber}" ในระบบ
+                    {t('repairHouseNotFoundInSystem', { number: localHouseNumber })}
                   </Text>
                 )}
                 {houseValid === true && (
                   <Text style={styles.validationSuccess}>
-                    ✓ บ้านเลขที่ถูกต้อง
+                    {t('repairHouseValid')}
                   </Text>
                 )}
                 {houseValid === null && (
                   <Text style={[styles.validationHint, { color: colors.subtext }]}>
-                    * ต้องเป็นบ้านเลขที่ที่มีอยู่ในระบบ
+                    {t('repairHouseHint')}
                   </Text>
                 )}
               </View>
             )}
 
-            {/* แสดงบ้านเลขที่สำหรับ user (อ่านอย่างเดียว) */}
+            {/* เนเธชเธ”เธเธเนเธฒเธเน€เธฅเธเธ—ี่สำหรับ user (เธญเนเธฒเธเธญเธขเนเธฒเธเน€เธ”เธตเธขเธง) */}
             {!isAdmin && myHouseNumber && (
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>บ้านเลขที่</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>{t('repairHouseNumberLabel')}</Text>
                 <View
                   style={[
                     styles.textInput,
@@ -420,33 +393,35 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.text }]}>หัวข้อ *</Text>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>{t('repairTitleRequired')}</Text>
               <TextInput
                 style={[
                   styles.textInput,
                   { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text },
                 ]}
-                placeholder="ระบุปัญหาที่ต้องการแจ้งซ่อม"
+                placeholder={t('repairTitlePlaceholder')}
                 placeholderTextColor={colors.subtext}
                 value={localTitle}
                 onChangeText={setLocalTitle}
+                maxLength={REPAIR_TITLE_MAX_LENGTH}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.text }]}>รายละเอียด</Text>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>{t('repairDetailLabel')}</Text>
               <TextInput
                 style={[
                   styles.textArea,
                   { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text },
                 ]}
-                placeholder="อธิบายรายละเอียดเพิ่มเติม (ถ้ามี)"
+                placeholder={t('repairDetailPlaceholder')}
                 placeholderTextColor={colors.subtext}
                 multiline
                 numberOfLines={4}
                 value={localDetail}
                 onChangeText={setLocalDetail}
                 textAlignVertical="top"
+                maxLength={REPAIR_DETAIL_MAX_LENGTH}
               />
             </View>
 
@@ -488,12 +463,12 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
               ) : (
                 <Ionicons name="images-outline" size={18} color={colors.text} />
               )}
-              <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>เลือกรูป</Text>
+              <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>{t('repairChooseImage')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.mediaBtn, { borderColor: colors.border }, (isDisabled || assets.length >= MAX_PHOTOS) && styles.opacityHalf]}
-              onPress={takeFromCamera}
+              onPress={openCamera}
               disabled={isDisabled || assets.length >= MAX_PHOTOS}
             >
               {isPickingImage ? (
@@ -501,7 +476,7 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
               ) : (
                 <Ionicons name="camera-outline" size={18} color={colors.text} />
               )}
-              <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>ถ่ายรูป</Text>
+              <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>{t('repairTakePhoto')}</Text>
             </TouchableOpacity>
 
             <View style={styles.justifyCenter}>
@@ -520,7 +495,7 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
               onPress={onClose}
               disabled={isDisabled}
             >
-              <Text style={[styles.cancelButtonText, { color: colors.subtext }]}>ยกเลิก</Text>
+              <Text style={[styles.cancelButtonText, { color: colors.subtext }]}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitButton, { backgroundColor: colors.success }, isDisabled && styles.opacityDisabled]}
@@ -532,7 +507,7 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
               ) : (
                 <>
                   <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                  <Text style={styles.submitButtonText}>ส่งคำขอ</Text>
+                  <Text style={styles.submitButtonText}>{t('repairSubmit')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -545,7 +520,7 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
             <View style={styles.uploadProgressBox}>
               <ActivityIndicator size="large" color="#3B82F6" />
               <Text style={styles.uploadProgressTitle}>
-                {uploadNote || 'กำลังอัปโหลด...'}
+                {uploadNote || t('repairUploading')}
               </Text>
               <View style={styles.progressBarContainer}>
                 <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
@@ -569,8 +544,8 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
               <View style={styles.successIconCircle}>
                 <Ionicons name="checkmark" size={48} color="#fff" />
               </View>
-              <Text style={styles.successTitle}>ส่งคำขอสำเร็จ!</Text>
-              <Text style={styles.successSubtitle}>การแจ้งซ่อมถูกบันทึกแล้ว</Text>
+              <Text style={styles.successTitle}>{t('repairSubmitSuccess')}</Text>
+              <Text style={styles.successSubtitle}>{t('repairSubmitSuccessDesc')}</Text>
             </Animated.View>
           </View>
         )}
@@ -584,10 +559,10 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
                 <Ionicons name="alert-circle" size={32} color="#EF4444" />
               </View>
               <Text style={styles.warningTitle}>
-                กรอกข้อมูลไม่ครบ
+                {t('repairIncompleteData')}
               </Text>
               <Text style={styles.warningSubtitle}>
-                กรุณากรอกข้อมูลต่อไปนี้:
+                {t('repairFillRequired')}
               </Text>
               <View style={styles.warningFieldsBox}>
                 {missingFields.map((field, index) => (
@@ -601,16 +576,23 @@ const AddRepairModal = React.memo(({ visible, onClose, onSubmit, saving, colors,
                 onPress={() => setWarningVisible(false)}
                 style={styles.warningBtn}
               >
-                <Text style={styles.warningBtnText}>ตกลง</Text>
+                <Text style={styles.warningBtnText}>{t('repairOk')}</Text>
               </TouchableOpacity>
             </View>
         </View>
       </Modal>
+
+      {/* Vision Camera Modal */}
+      <RepairCameraModal
+        visible={cameraVisible}
+        onClose={() => setCameraVisible(false)}
+        onCapture={onCameraCapture}
+      />
     </Modal>
   );
 });
 
-// ---------- DetailModal (ย้ายออกมานอก RepairScreen เพื่อป้องกัน re-create) ----------
+// ---------- DetailModal (ย้ายออกมานอก RepairScreen เน€พื่อป้องกัน re-create) ----------
 type GalleryItem =
   | { key: string; kind: 'server'; id: number; url: string }
   | { key: string; kind: 'local'; asset: Asset; url: string };
@@ -664,12 +646,14 @@ const DetailModal = React.memo(({
   setUpdateSaving,
   deleteSaving,
 }: DetailModalProps) => {
+  const { t } = useI18n();
   const [localTitle, setLocalTitle] = useState('');
   const [localDetail, setLocalDetail] = useState('');
   const [localStatus, setLocalStatus] = useState<Repair['status']>('pending');
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPickingImage, setIsPickingImage] = useState(false);
+  const [cameraVisible, setCameraVisible] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const successOpacity = useRef(new Animated.Value(0)).current;
   // confirm dialog state (status change)
@@ -682,7 +666,7 @@ const DetailModal = React.memo(({
   const [requiresReason, setRequiresReason] = useState(true);
   const deleteConfirmOpacity = useRef(new Animated.Value(0)).current;
 
-  // แสดง success popup พร้อม animation fade in ตรงกลาง
+  // เนเธชเธ”ง success popup พร้อม animation fade in เธ•รงกลาง
   const showSuccessPopup = () => {
     successOpacity.setValue(0);
     setShowSuccess(true);
@@ -691,7 +675,7 @@ const DetailModal = React.memo(({
       duration: 200,
       useNativeDriver: true,
     }).start();
-    // ปิดอัตโนมัติหลัง 1.5 วิ
+    // เธเธดเธ”เธญเธฑเธ•เนเธเธกเธฑเธ•ิหลัง 1.5 เธงเธด
     setTimeout(() => {
       Animated.timing(successOpacity, {
         toValue: 0,
@@ -721,6 +705,12 @@ const DetailModal = React.memo(({
     prevVisible.current = visible;
   }, [visible, selected]);
 
+  useEffect(() => {
+    if (!visible) {
+      setCameraVisible(false);
+    }
+  }, [visible]);
+
   if (!selected) return null;
 
   const MAX_PHOTOS = 5;
@@ -732,6 +722,7 @@ const DetailModal = React.memo(({
     if (isPickingImage || !canAddMore) return;
     setIsPickingImage(true);
     try {
+      await waitForKeyboardToSettleBeforeMedia();
       const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: remainingSlots, quality: 0.8, includeExtra: false });
       if (result.didCancel || !result.assets) return;
       const items: GalleryItem[] = (result.assets || []).filter(a => !!a.uri).slice(0, remainingSlots).map(a => ({
@@ -747,35 +738,35 @@ const DetailModal = React.memo(({
     }
   };
 
-  const takeFromCamera = async () => {
+  const openCamera = async () => {
     if (isPickingImage || !canAddMore) return;
-    setIsPickingImage(true);
-    try {
-      const result = await launchCamera({ mediaType: 'photo', quality: 0.8, includeExtra: false, saveToPhotos: true });
-      if (result.didCancel || !result.assets) return;
-      const items: GalleryItem[] = (result.assets || []).filter(a => !!a.uri).slice(0, remainingSlots).map(a => ({
-        key: `lc_${Date.now()}_${Math.random()}`, kind: 'local', asset: a, url: a.uri!,
-      }));
-      if (items.length > 0) {
-        setGallery(prev => [...prev, ...items].slice(0, MAX_PHOTOS));
-      }
-    } catch (e) {
-      console.log('takeFromCamera error:', e);
-    } finally {
-      setIsPickingImage(false);
+    await waitForKeyboardToSettleBeforeMedia();
+    setCameraVisible(true);
+  };
+
+  const onCameraCapture = (asset: Asset) => {
+    if (asset.uri) {
+      const item: GalleryItem = {
+        key: `lc_${Date.now()}_${Math.random()}`,
+        kind: 'local',
+        asset,
+        url: asset.uri,
+      };
+      setGallery(prev => [...prev, item].slice(0, MAX_PHOTOS));
     }
+    setCameraVisible(false);
   };
 
   const removeItem = (key: string) => setGallery(prev => prev.filter(g => g.key !== key));
 
-  // อัปโหลดทีละไฟล์ + โชว์สถานะ พร้อม progress bar
+  // เธญเธฑเธเนเธซเธฅเธ”เธ—ีละไฟล์ + เนเธเธงเนเธชเธ–านะ พร้อม progress bar
   const uploadLocalAssets = async (assets: { asset: Asset }[], repairId: number) => {
     setUploadBusy(true);
     setUploadProgress(0);
     try {
       const total = assets.length;
       for (let i = 0; i < total; i++) {
-        setUploadNote(`กำลังอัปโหลดรูป ${i + 1}/${total} ...`);
+        setUploadNote(t('repairUploadingPhotoN', { current: String(i + 1), total: String(total) }));
         setUploadProgress(Math.round((i / total) * 100));
         await uploadPhotoToRepair(repairId, assets[i].asset);
         setUploadProgress(Math.round(((i + 1) / total) * 100));
@@ -787,12 +778,12 @@ const DetailModal = React.memo(({
     }
   };
 
-  // ฟังก์ชันบันทึกจริง (เรียกหลังยืนยันแล้ว)
+  // เธเธฑเธเธเนเธเธฑเธเธเธฑเธเธ—ึกจริง (เน€รียกหลังยืนยันแล้ว)
   const performSave = async () => {
     try {
       setUpdateSaving(true);
 
-      // 1) ลบรูปที่ถูกเอาออก
+      // 1) เธฅเธเธฃเธนเธเธ—เธตเนเธ–เธนเธเน€อาออก
       const currentServerIds = new Set(gallery.filter(g => g.kind === 'server').map(g => (g as any).id as number));
       const existedServerIds = new Set((selected.photos ?? []).map(p => p.id));
       const toDelete = [...existedServerIds].filter(id => !currentServerIds.has(id));
@@ -805,29 +796,29 @@ const DetailModal = React.memo(({
           });
           if (!res.ok) {
             const j = await res.json().catch(() => null);
-            throw new Error(j?.error || `ลบรูปไม่สำเร็จ (#${pid})`);
+            throw new Error(j?.error || t('repairDeleteImageFailed') + ` (#${pid})`);
           }
         }
       }
 
-      // 2) อัปโหลดรูปใหม่ทั้งหมด
+      // 2) เธญเธฑเธเนเธซเธฅเธ”เธฃเธนเธเนเธซเธกเนเธ—เธฑเนเธเธซเธกเธ”
       const locals = gallery.filter(g => g.kind === 'local') as Extract<GalleryItem, { kind: 'local' }>[];
       if (locals.length > 0) {
         await uploadLocalAssets(locals, selected.id);
       }
 
-      // 3) อัปเดตฟิลด์อื่น ๆ
+      // 3) เธญเธฑเธเน€เธ”เธ•เธเธดเธฅเธ”์อื่น ๆ
       await saveEdit({ title: localTitle, detail: localDetail, status: localStatus });
 
-      // 4) รีโหลดรายการให้ sync
+      // 4) เธฃเธตเนเธซเธฅเธ”รายการให้ sync
       await fetchRepairs();
 
-      // ปิดหน้ารายละเอียดและพรีวิว
+      // เธเธดเธ”เธซเธเนเธฒเธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”และพรีวิว
       setPreviewUrl(null);
-      // แสดง success popup
+      // เนเธชเธ”ง success popup
       showSuccessPopup();
     } catch (e: any) {
-      showAlert('ผิดพลาด', e?.message || 'บันทึกไม่สำเร็จ');
+      showAlert(t('repairFailed'), e?.message || t('repairSaveFailed'));
     } finally {
       setUpdateSaving(false);
       setUploadBusy(false);
@@ -835,9 +826,9 @@ const DetailModal = React.memo(({
     }
   };
 
-  // ฟังก์ชันบันทึก (ตรวจสอบการเปลี่ยนสถานะ)
+  // เธเธฑเธเธเนเธเธฑเธเธเธฑเธเธ—ึก (เธ•เธฃเธงเธเธชเธญเธเธเธฒเธฃเน€เธเธฅเธตเนเธขเธเธชเธ–านะ)
   const onSave = async () => {
-    // ถ้าเป็น admin และสถานะเปลี่ยน ให้ขอยืนยันก่อน
+    // เธ–เนเธฒเน€ป็น admin เนเธฅเธฐเธชเธ–เธฒเธเธฐเน€ปลี่ยน ให้ขอยืนยันก่อน
     if (isAdmin && selected && localStatus !== selected.status) {
       setConfirmData({
         from: getStatusText(selected.status),
@@ -874,8 +865,8 @@ const DetailModal = React.memo(({
   // Delete confirm functions
   const openDeleteConfirm = () => {
     if (!selected) return;
-    // ตรวจสอบว่าต้องใส่หมายเหตุหรือไม่
-    // ถ้าสถานะ done และ done_at เกิน 10 วัน ไม่ต้องใส่หมายเหตุ
+    // เธ•เธฃเธงเธเธชเธญเธเธงเนเธฒเธ•เนเธญเธเนเธชเนเธซเธกเธฒเธขเน€เธซเธ•ุหรือไม่
+    // เธ–เนเธฒเธชเธ–านะ done และ done_at เน€กิน 10 วัน เนเธกเนเธ•เนเธญเธเนเธชเนเธซเธกเธฒเธขเน€เธซเธ•เธธ
     let needsReason = true;
     if (selected.status === 'done' && selected.done_at) {
       const doneDate = new Date(selected.done_at);
@@ -907,9 +898,9 @@ const DetailModal = React.memo(({
   };
 
   const performDelete = () => {
-    // ถ้าต้องใส่หมายเหตุ แต่ไม่ได้ใส่ ไม่ให้ลบ
+    // เธ–เนเธฒเธ•เนเธญเธเนเธชเนเธซเธกเธฒเธขเน€เธซเธ•เธธ เนเธ•เนเนเธกเนเนเธ”้ใส่ ไม่ให้ลบ
     if (requiresReason && !deleteReason.trim()) {
-      showAlert('กรุณาใส่หมายเหตุ', 'กรุณาระบุเหตุผลในการลบ');
+      showAlert(t('repairEnterDeleteReason'), t('repairSpecifyDeleteReason'));
       return;
     }
     closeDeleteConfirm();
@@ -920,7 +911,7 @@ const DetailModal = React.memo(({
 
   return (
     <>
-      {/* โมดัลรายละเอียด — แสดงเฉพาะเมื่อไม่มีหน้าพรีวิว */}
+      {/* เนเธกเธ”เธฑเธฅเธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ” โ€” เนเธชเธ”เธเน€เธเธเธฒเธฐเน€มื่อไม่มีหน้าพรีวิว */}
       <Modal
         visible={visible && !previewUrl}
         transparent
@@ -929,13 +920,13 @@ const DetailModal = React.memo(({
       >
         <View style={styles.detailOverlay}>
           <View style={[styles.detailCard, { backgroundColor: colors.cardBg }]}>
-            {/* overlay ระหว่างอัปโหลด - UI เหมือน AddRepairModal */}
+            {/* overlay เธฃเธฐเธซเธงเนเธฒเธเธญเธฑเธเนเธซเธฅเธ” - UI เน€หมือน AddRepairModal */}
             {uploadBusy && (
               <View style={styles.uploadOverlayFullScreen}>
                 <View style={styles.uploadProgressBox}>
                   <ActivityIndicator size="large" color="#3B82F6" />
                   <Text style={styles.uploadProgressTitle}>
-                    {uploadNote || 'กำลังอัปโหลด...'}
+                    {uploadNote || t('repairUploading')}
                   </Text>
                   <View style={styles.progressBarContainer}>
                     <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
@@ -960,19 +951,19 @@ const DetailModal = React.memo(({
             {isLocked && (
                <View style={styles.lockedWarningBox}>
                  <Ionicons name="lock-closed" size={18} color="#EF4444" style={styles.mr8} />
-                 <Text style={styles.lockedWarningText}>แอดมินไม่อนุญาตให้แก้ไขรายการนี้</Text>
+                 <Text style={styles.lockedWarningText}>{t('repairAdminLocked')}</Text>
                </View>
             )}
 
-            <Text style={[styles.detailMeta, styles.mb8, { color: colors.subtext }]}>รหัสการแจ้งซ่อม: #{selected?.id}</Text>
-            {/* แสดงบ้านเลขที่ */}
+            <Text style={[styles.detailMeta, styles.mb8, { color: colors.subtext }]}>{t('repairRepairId')}: #{selected?.id}</Text>
+            {/* เนเธชเธ”เธเธเนเธฒเธเน€เธฅเธเธ—ี่ */}
             <View style={styles.detailRow}>
               <Ionicons name="home-outline" size={16} color={colors.subtext} />
-              <Text style={[styles.detailMeta, { color: colors.subtext }]}>บ้านเลขที่: {selected?.house_number || '-'}</Text>
+              <Text style={[styles.detailMeta, { color: colors.subtext }]}>{t('repairHouseNumberLabel')}: {selected?.house_number || '-'}</Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="pricetag-outline" size={16} color={colors.subtext} />
-              <Text style={[styles.detailMeta, { color: colors.subtext }]}>สถานะ: {getStatusText(localStatus)}</Text>
+              <Text style={[styles.detailMeta, { color: colors.subtext }]}>{t('repairStatusLabel')}: {getStatusText(localStatus)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="time-outline" size={16} color={colors.subtext} />
@@ -1010,15 +1001,15 @@ const DetailModal = React.memo(({
                 ) : (
                   <Ionicons name="images-outline" size={18} color={colors.text} />
                 )}
-                <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>เลือกรูป</Text>
+                <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>{t('repairChooseImage')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.mediaBtn, { borderColor: colors.border }, (isDisabled || !canAddMore) && styles.opacityHalf]} onPress={takeFromCamera} disabled={isDisabled || !canAddMore}>
+              <TouchableOpacity style={[styles.mediaBtn, { borderColor: colors.border }, (isDisabled || !canAddMore) && styles.opacityHalf]} onPress={openCamera} disabled={isDisabled || !canAddMore}>
                 {isPickingImage ? (
                   <ActivityIndicator size="small" color={colors.text} />
                 ) : (
                   <Ionicons name="camera-outline" size={18} color={colors.text} />
                 )}
-                <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>ถ่ายรูป</Text>
+                <Text style={[styles.mediaBtnLabel, { color: colors.text }]}>{t('repairTakePhoto')}</Text>
               </TouchableOpacity>
               <View style={styles.justifyCenter}>
                 <Text style={[styles.photoCountText, { color: colors.subtext }]}>
@@ -1029,15 +1020,15 @@ const DetailModal = React.memo(({
 
             <View style={styles.detailDivider} />
 
-            <Text style={[styles.detailLabel, { color: colors.text }]}>หัวข้อ</Text>
-            <TextInput style={[styles.textInput, { borderColor: colors.border, color: colors.text }, isLocked && styles.opacityLocked]} value={localTitle} onChangeText={setLocalTitle} editable={!isDisabled && !isLocked} />
+            <Text style={[styles.detailLabel, { color: colors.text }]}>{t('repairTitleField')}</Text>
+            <TextInput style={[styles.textInput, { borderColor: colors.border, color: colors.text }, isLocked && styles.opacityLocked]} value={localTitle} onChangeText={setLocalTitle} editable={!isDisabled && !isLocked} maxLength={REPAIR_TITLE_MAX_LENGTH} />
 
-            <Text style={[styles.detailLabel, styles.mt10, { color: colors.text }]}>รายละเอียด</Text>
-            <TextInput style={[styles.textArea, { borderColor: colors.border, color: colors.text }, isLocked && styles.opacityLocked]} multiline value={localDetail} onChangeText={setLocalDetail} textAlignVertical="top" editable={!isDisabled && !isLocked} />
+            <Text style={[styles.detailLabel, styles.mt10, { color: colors.text }]}>{t('repairDetailLabel')}</Text>
+            <TextInput style={[styles.textArea, { borderColor: colors.border, color: colors.text }, isLocked && styles.opacityLocked]} multiline value={localDetail} onChangeText={setLocalDetail} textAlignVertical="top" editable={!isDisabled && !isLocked} maxLength={REPAIR_DETAIL_MAX_LENGTH} />
 
             {isAdmin && (
               <>
-                <Text style={[styles.detailLabel, styles.mt10, { color: colors.text }]}>สถานะ</Text>
+                <Text style={[styles.detailLabel, styles.mt10, { color: colors.text }]}>{t('repairStatusLabel')}</Text>
                 <View style={styles.statusRow}>
                   {(['pending', 'in_progress', 'done'] as Repair['status'][]).map(s => (
                     <TouchableOpacity
@@ -1067,23 +1058,23 @@ const DetailModal = React.memo(({
               {!isLocked && (
               <TouchableOpacity style={[styles.detailOkBtn, { backgroundColor: colors.success }, isDisabled && styles.opacityDisabled]} onPress={onSave} disabled={isDisabled}>
                 {isDisabled ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark" size={18} color="#fff" />}
-                <Text style={styles.detailOkText}>{isDisabled ? 'กำลังบันทึก...' : 'บันทึก'}</Text>
+                <Text style={styles.detailOkText}>{isDisabled ? t('repairSaving') : t('repairSave')}</Text>
               </TouchableOpacity>
               )}
               <TouchableOpacity style={[styles.detailOkBtn, { backgroundColor: colors.subtext }]} onPress={onClose} disabled={isDisabled}>
                 <Ionicons name="close" size={18} color="#fff" />
-                <Text style={styles.detailOkText}>ยกเลิก</Text>
+                <Text style={styles.detailOkText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.detailOkBtn, { backgroundColor: colors.danger }, deleteSaving && styles.opacityDisabled]} onPress={openDeleteConfirm} disabled={deleteSaving || isDisabled}>
                 {deleteSaving ? <ActivityIndicator color="#fff" /> : <Ionicons name="trash" size={18} color="#fff" />}
-                <Text style={styles.detailOkText}>{deleteSaving ? 'กำลังลบ...' : 'ลบ'}</Text>
+                <Text style={styles.detailOkText}>{deleteSaving ? t('repairDeleting') : t('repairDelete')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* โมดัลพรีวิวเต็มจอ — แยกออกมา ไม่ซ้อน */}
+      {/* เนเธกเธ”เธฑเธฅเธเธฃเธตเธงเธดเธงเน€เธ•็มจอ โ€” แยกออกมา ไม่ซ้อน */}
       <Modal
         visible={!!previewUrl}
         transparent={false}
@@ -1099,7 +1090,7 @@ const DetailModal = React.memo(({
         </View>
       </Modal>
 
-      {/* Success Popup สวยๆ fade in ตรงกลาง */}
+      {/* Success Popup สวยๆ fade in เธ•รงกลาง */}
       <Modal visible={showSuccess} transparent animationType="none">
         <View style={styles.successOverlay}>
           <Animated.View
@@ -1113,8 +1104,8 @@ const DetailModal = React.memo(({
             <View style={styles.successIconCircle}>
               <Ionicons name="checkmark" size={48} color="#fff" />
             </View>
-            <Text style={styles.successTitle}>บันทึกสำเร็จ!</Text>
-            <Text style={styles.successSubtitle}>ข้อมูลได้รับการอัปเดตแล้ว</Text>
+            <Text style={styles.successTitle}>{t('repairSaveSuccess')}</Text>
+            <Text style={styles.successSubtitle}>{t('repairSaveSuccessDesc')}</Text>
           </Animated.View>
         </View>
       </Modal>
@@ -1126,7 +1117,7 @@ const DetailModal = React.memo(({
             <View style={styles.confirmIconCircle}>
               <Ionicons name="swap-horizontal" size={32} color="#fff" />
             </View>
-            <Text style={styles.confirmTitle}>ยืนยันเปลี่ยนสถานะ</Text>
+            <Text style={styles.confirmTitle}>{t('repairConfirmStatusChange')}</Text>
             {confirmData && (
               <View style={styles.confirmStatusRow}>
                 <View style={[styles.confirmStatusBadge, styles.confirmBadgeGray]}>
@@ -1138,14 +1129,14 @@ const DetailModal = React.memo(({
                 </View>
               </View>
             )}
-            <Text style={styles.confirmSubtitle}>ต้องการเปลี่ยนสถานะหรือไม่?</Text>
+            <Text style={styles.confirmSubtitle}>{t('repairWantToChangeStatus')}</Text>
             <View style={styles.confirmButtons}>
               <TouchableOpacity style={styles.confirmBtnCancel} onPress={closeConfirm}>
-                <Text style={styles.confirmBtnCancelText}>ยกเลิก</Text>
+                <Text style={styles.confirmBtnCancelText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.confirmBtnOk} onPress={handleConfirm}>
                 <Ionicons name="checkmark" size={18} color="#fff" style={styles.mr4} />
-                <Text style={styles.confirmBtnOkText}>ยืนยัน</Text>
+                <Text style={styles.confirmBtnOkText}>{t('confirm')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1159,34 +1150,35 @@ const DetailModal = React.memo(({
             <View style={styles.deleteIconCircle}>
               <Ionicons name="trash" size={32} color="#fff" />
             </View>
-            <Text style={styles.deleteConfirmTitle}>ยืนยันการลบ</Text>
-            <Text style={styles.deleteConfirmId}>รหัส #{selected?.id}</Text>
+            <Text style={styles.deleteConfirmTitle}>{t('repairConfirmDelete')}</Text>
+            <Text style={styles.deleteConfirmId}>{t('repairIdLabel')} #{selected?.id}</Text>
             
             {requiresReason ? (
               <>
                 <Text style={styles.deleteReasonLabel}>
-                  <Ionicons name="warning" size={14} color="#F59E0B" /> กรุณาระบุเหตุผลในการลบ
+                  <Ionicons name="warning" size={14} color="#F59E0B" /> {t('repairDeleteReasonLabel')}
                 </Text>
                 <TextInput
                   style={styles.deleteReasonInput}
-                  placeholder="หมายเหตุการลบ..."
+                  placeholder={t('repairDeleteReasonPlaceholder')}
                   placeholderTextColor="#9CA3AF"
                   value={deleteReason}
                   onChangeText={setDeleteReason}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
+                  maxLength={REPAIR_DELETE_REASON_MAX_LENGTH}
                 />
               </>
             ) : (
               <Text style={styles.deleteNoReasonText}>
-                <Ionicons name="checkmark-circle" size={14} color="#10B981" /> สถานะ "เสร็จสิ้น" เกิน 10 วัน สามารถลบได้เลย
+                <Ionicons name="checkmark-circle" size={14} color="#10B981" /> {t('repairDoneOver10Days')}
               </Text>
             )}
 
             <View style={styles.confirmButtons}>
               <TouchableOpacity style={styles.confirmBtnCancel} onPress={closeDeleteConfirm}>
-                <Text style={styles.confirmBtnCancelText}>ยกเลิก</Text>
+                <Text style={styles.confirmBtnCancelText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.deleteBtnOk, (requiresReason && !deleteReason.trim()) && styles.opacityHalf]} 
@@ -1194,12 +1186,18 @@ const DetailModal = React.memo(({
                 disabled={requiresReason && !deleteReason.trim()}
               >
                 <Ionicons name="trash" size={18} color="#fff" style={styles.mr4} />
-                <Text style={styles.confirmBtnOkText}>ลบ</Text>
+                <Text style={styles.confirmBtnOkText}>{t('repairDelete')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </Animated.View>
       </Modal>
+
+      <RepairCameraModal
+        visible={cameraVisible}
+        onClose={() => setCameraVisible(false)}
+        onCapture={onCameraCapture}
+      />
     </>
   );
 });
@@ -1214,6 +1212,7 @@ interface HeaderBarProps {
 }
 
 const HeaderBar = React.memo(({ searchId, setSearchId, colors, isAdmin, setOpen }: HeaderBarProps) => {
+  const { t } = useI18n();
   const [localQuery, setLocalQuery] = useState<string>('');
   const timerRef = React.useRef<NodeJS.Timeout | null>(null);
   useEffect(() => { setLocalQuery(typeof searchId === 'string' ? searchId : ''); }, [searchId]);
@@ -1238,7 +1237,7 @@ const HeaderBar = React.memo(({ searchId, setSearchId, colors, isAdmin, setOpen 
             <Ionicons name="search" size={18} color={colors.subtext} />
             <TextInput
               style={[styles.searchInput, { color: colors.text }]}
-              placeholder="ค้นหา รหัสแจ้งซ่อม"
+              placeholder={t('repairSearchPlaceholder')}
               placeholderTextColor={colors.subtext}
               keyboardType="decimal-pad"
               autoCapitalize="none"
@@ -1265,7 +1264,7 @@ const HeaderBar = React.memo(({ searchId, setSearchId, colors, isAdmin, setOpen 
       ) : (
         <TouchableOpacity style={[styles.addButtonFull, { backgroundColor: colors.success }]} onPress={() => setOpen(true)} activeOpacity={0.9}>
           <Ionicons name="add" size={20} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>แจ้งซ่อม</Text>
+          <Text style={styles.addButtonText}>{t('repairAddButton')}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -1278,17 +1277,21 @@ interface ListEmptyProps {
   listLoading: boolean;
 }
 
-const ListEmpty = React.memo(({ colors, listLoading }: ListEmptyProps) => (
+const ListEmpty = React.memo(({ colors, listLoading }: ListEmptyProps) => {
+  const { t } = useI18n();
+  return (
   <View style={styles.fullScreenEmpty}>
     <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '10' }]}>
       <Ionicons name="construct-outline" size={64} color={colors.primary} />
     </View>
-    <Text style={[styles.emptyTitle, { color: colors.text }]}>🔧 แจ้งซ่อม</Text>
-    <Text style={[styles.emptySubtitle, { color: colors.subtext }]}>{listLoading ? 'กำลังโหลดข้อมูล...' : 'ไม่พบรายการ'}</Text>
+    <Text style={[styles.emptyTitle, { color: colors.text }]}>{t('repairEmptyTitle')}</Text>
+    <Text style={[styles.emptySubtitle, { color: colors.subtext }]}>{listLoading ? t('repairLoading') : t('repairNoItems')}</Text>
   </View>
-));
+  );
+});
 
 const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false }) => {
+  const { t } = useI18n();
   const [repairs, setRepairs] = useState<Repair[]>([]);
   const [me, setMe] = useState<Me | null>(null);
 
@@ -1297,7 +1300,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
   const [updateSaving, setUpdateSaving] = useState(false);
   const [deleteSaving, setDeleteSaving] = useState(false);
 
-  // อัปโหลดจำนวนมาก (overlay)
+  // เธญเธฑเธเนเธซเธฅเธ”จำนวนมาก (overlay)
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadNote, setUploadNote] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState<number>(0); // 0-100
@@ -1306,7 +1309,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
   const [showCreateSuccess, setShowCreateSuccess] = useState(false);
   const createSuccessOpacity = useRef(new Animated.Value(0)).current;
 
-  // แสดง success popup สำหรับสร้างใหม่ - fade in ตรงกลาง
+  // เนเธชเธ”ง success popup สำหรับสร้างใหม่ - fade in เธ•รงกลาง
   const showCreateSuccessPopup = () => {
     createSuccessOpacity.setValue(0);
     setShowCreateSuccess(true);
@@ -1315,7 +1318,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
       duration: 200,
       useNativeDriver: true,
     }).start();
-    // ปิดอัตโนมัติหลัง 1.5 วิ
+    // เธเธดเธ”เธญเธฑเธ•เนเธเธกเธฑเธ•ิหลัง 1.5 เธงเธด
     setTimeout(() => {
       Animated.timing(createSuccessOpacity, {
         toValue: 0,
@@ -1380,28 +1383,28 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
 
   useEffect(() => { fetchMe(); fetchRepairs(); }, [fetchMe, fetchRepairs]);
 
-  // ===== Uploads (ย่อรูป + ตั้งชื่อไฟล์) =====
+  // ===== Uploads (ย่อรูป + เธ•ั้งชื่อไฟล์) =====
   // NOTE: uploadFile is unused but kept for potential standalone use
   // const uploadFile = useCallback(async (asset: Asset): Promise<string> => { ... }, [getToken, me]);
 
 
-  /** แก้ไข URI สำหรับ iOS ที่เป็น ph:// และกันกรณี content:// ที่ยังใช้ได้อยู่ */
+  /** แก้ไข URI สำหรับ iOS เธ—เธตเนเน€ป็น ph:// เนเธฅเธฐเธเธฑเธเธเธฃเธ“เธต content:// เธ—เธตเนเธขเธฑเธเนเธเนเนเธ”้อยู่ */
   const normalizeAssetUri = (uri?: string | null) => {
     if (!uri) return '';
-    // iOS Photo library (บางครั้ง ImageResizer คืน ph:// ทำให้ fetch ไม่ได้)
+    // iOS Photo library (บางครั้ง ImageResizer คืน ph:// เธ—ำให้ fetch เนเธกเนเนเธ”้)
     if (uri.startsWith('ph://')) {
-      // ปล่อยให้ ImageResizer จัดการ; ถ้ายังเป็น ph:// จะโยน error ชัดเจน
+      // ปล่อยให้ ImageResizer เธเธฑเธ”การ; เธ–เนเธฒเธขเธฑเธเน€ป็น ph:// จะโยน error เธเธฑเธ”เน€จน
       return uri.replace('ph://', 'assets-library://');
     }
-    // Android content:// ใช้ได้
+    // Android content:// เนเธเนเนเธ”้
     return uri;
   };
 
   const uploadPhotoToRepair = useCallback(async (repairId: number, asset: Asset) => {
     const token = await getToken();
-    if (!token) throw new Error('ยังไม่ได้ล็อกอิน');
+    if (!token) throw new Error(t('repairNotLoggedIn'));
 
-    if (!asset.uri) throw new Error('รูปไม่พร้อมอัปโหลด');
+    if (!asset.uri) throw new Error(t('repairImageNotReady'));
     asset.uri = normalizeAssetUri(asset.uri);
 
     const userTag = me?.username || me?.id || 'guest';
@@ -1415,7 +1418,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
       type: file.type,
     });
 
-    // เพิ่มความทนทาน: timeout + retry
+    // เน€เธเธดเนเธกเธเธงเธฒเธกเธ—เธเธ—าน: timeout + retry
     const MAX_RETRY = 2;
     let attempt = 0;
     let lastErr: any = null;
@@ -1429,7 +1432,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
           method: 'POST',
             headers: {
               Authorization: `Bearer ${token}`,
-              // ไม่ set Content-Type ให้ RN ใส่ boundary อัตโนมัติ
+              // ไม่ set Content-Type ให้ RN ใส่ boundary เธญเธฑเธ•เนเธเธกเธฑเธ•เธด
             },
             body: form,
             signal: controller.signal,
@@ -1443,11 +1446,11 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
           data = await res.json();
         } else {
           const txt = await res.text();
-          throw new Error(`อัปโหลดรูปตอบกลับไม่ใช่ JSON (${res.status}) ${txt.slice(0,80)}`);
+          throw new Error(`${t('repairUploadNotJson')} (${res.status}) ${txt.slice(0,80)}`);
         }
 
         if (!res.ok) {
-          throw new Error(data?.error || data?.message || `อัปโหลดรูปไม่สำเร็จ (HTTP ${res.status})`);
+          throw new Error(data?.error || data?.message || `${t('repairUploadFailed')} (HTTP ${res.status})`);
         }
 
         // success
@@ -1458,26 +1461,26 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         if (attempt === MAX_RETRY) break;
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         attempt++;
-        setUploadNote(`รีลองอัปโหลดรูป (ครั้งที่ ${attempt + 1}) ...`);
+        setUploadNote(t('repairRetryUpload', { attempt: String(attempt + 1) }));
         if (isAbort) continue;
       }
     }
-    throw new Error(lastErr?.message || 'อัปโหลดรูปไม่สำเร็จ (เครือข่าย)');
-  }, [getToken, me]);
+    throw new Error(lastErr?.message || t('repairUploadNetworkFail'));
+  }, [getToken, me, t]);
 
   const submit = async ({ title, detail, assets, houseNumber }: { title: string; detail: string; assets: Asset[]; houseNumber?: string }) => {
     if (!title.trim()) {
-      showAlert('กรอกหัวข้อ', 'กรอกหัวข้อแจ้งซ่อมก่อน');
+      showAlert(t('repairEnterTitle'), t('repairEnterTitleFirst'));
       return;
     }
 
-    // ถ้าเป็น admin ต้องระบุบ้านเลขที่
+    // เธ–เนเธฒเน€ป็น admin เธ•เนเธญเธเธฃเธฐเธเธธเธเนเธฒเธเน€เธฅเธเธ—ี่
     if (isAdmin && !houseNumber?.trim()) {
-      showAlert('กรอกบ้านเลขที่', 'กรุณาระบุบ้านเลขที่ที่ต้องการแจ้งซ่อม');
+      showAlert(t('repairEnterHouseNumber'), t('repairEnterHouseNumberMsg'));
       return;
     }
 
-    // ตรวจสอบบ้านเลขที่ใน database (เฉพาะ admin)
+    // เธ•เธฃเธงเธเธชเธญเธเธเนเธฒเธเน€เธฅเธเธ—ี่ใน database (เน€ฉพาะ admin)
     if (isAdmin && houseNumber?.trim()) {
       try {
         const token = await getToken();
@@ -1486,18 +1489,18 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         });
         const validateData = await validateRes.json();
         if (!validateRes.ok || !validateData?.exists) {
-          showAlert('ไม่พบบ้านเลขที่', `บ้านเลขที่ "${houseNumber.trim()}" ไม่มีในระบบ`);
+          showAlert(t('repairHouseNotFoundTitle'), t('repairHouseNotFoundMsg', { number: houseNumber.trim() }));
           return;
         }
       } catch (e: any) {
-        showAlert('ข้อผิดพลาด', 'ไม่สามารถตรวจสอบบ้านเลขที่ได้');
+        showAlert(t('repairError'), t('repairCannotValidateHouse'));
         return;
       }
     }
 
     let uploadedUrls: string[] = [];
     try {
-      // ปิด keyboard ก่อนเริ่มอัปโหลด
+      // เธเธดเธ” keyboard เธเนเธญเธเน€เธฃเธดเนเธกเธญเธฑเธเนเธซเธฅเธ”
       Keyboard.dismiss();
       
       setCreateSaving(true);
@@ -1505,21 +1508,21 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
       setUploadNote('');
       setUploadProgress(0);
       const token = await getToken();
-      if (!token) throw new Error('ยังไม่ได้ล็อกอิน');
+      if (!token) throw new Error(t('repairNotLoggedIn'));
 
-      // ===== อัปโหลดทีละไฟล์ (Sequential) พร้อม retry =====
+      // ===== เธญเธฑเธเนเธซเธฅเธ”เธ—ีละไฟล์ (Sequential) พร้อม retry =====
       uploadedUrls = [];
       const total = assets?.length || 0;
       for (let i = 0; i < total; i++) {
         const a = assets[i];
         if (!a?.uri) continue;
-        setUploadNote(`อัปโหลดรูป ${i + 1}/${total} ...`);
+        setUploadNote(t('repairUploadingImageN', { current: String(i + 1), total: String(total) }));
         setUploadProgress(Math.round((i / total) * 100));
         uploadedUrls.push(await uploadSingleWithRetry(a, token, i + 1, total));
         setUploadProgress(Math.round(((i + 1) / total) * 100));
       }
 
-      setUploadNote('กำลังส่งคำขอสร้างรายการ...');
+      setUploadNote(t('repairCreatingRequest'));
 
       // ===== ส่งคำขอสร้าง Repairs =====
       const requestBody: any = {
@@ -1527,11 +1530,11 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         detail,
         images: uploadedUrls,
       };
-      // เพิ่ม house_number สำหรับ admin หรือ user ที่มี house_number
+      // เน€พิ่ม house_number สำหรับ admin เธซเธฃเธทเธญ user เธ—ี่มี house_number
       if (isAdmin && houseNumber?.trim()) {
         requestBody.house_number = houseNumber.trim();
       } else if (!isAdmin && me?.house_number) {
-        // สำหรับ user ทั่วไป ใช้ house_number ของตัวเอง
+        // สำหรับ user เธ—ั่วไป ใช้ house_number เธเธญเธเธ•เธฑเธงเน€อง
         requestBody.house_number = me.house_number;
       }
 
@@ -1552,20 +1555,20 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         data = await res.json();
       } else {
         const txt = await res.text();
-        throw new Error(`เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON (${res.status}) ${txt.slice(0, 120)}`);
+        throw new Error(`${t('repairServerNotJson')} (${res.status}) ${txt.slice(0, 120)}`);
       }
 
       if (!res.ok) {
-        throw new Error(data?.error || data?.message || 'ส่งคำขอไม่สำเร็จ');
+        throw new Error(data?.error || data?.message || t('repairRequestFailed'));
       }
 
       await fetchRepairs();
-      // แสดง success popup แทน Alert
+      // เนเธชเธ”ง success popup เนเธ—น Alert
       showCreateSuccessPopup();
     } catch (e: any) {
       console.error('Create repair failed:', e);
-      // ถ้า fail ให้แจ้ง และไม่ค้างสถานะ
-      showAlert('เกิดข้อผิดพลาด', e?.message || 'ส่งคำขอไม่สำเร็จ');
+      // เธ–้า fail ให้แจ้ง เนเธฅเธฐเนเธกเนเธเนเธฒเธเธชเธ–านะ
+      showAlert(t('repairError'), e?.message || t('repairRequestFailed'));
     } finally {
       setCreateSaving(false);
       setUploadBusy(false);
@@ -1574,7 +1577,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
     }
   };
 
-  // ===== Helper: อัปโหลดไฟล์เดี่ยวพร้อม timeout / retry =====
+  // ===== Helper: เธญเธฑเธเนเธซเธฅเธ”เนเธเธฅเนเน€เธ”ี่ยวพร้อม timeout / retry =====
   const uploadSingleWithRetry = async (asset: Asset, token: string, index: number, total: number): Promise<string> => {
     const MAX_RETRY = 2;
     let attempt = 0;
@@ -1610,11 +1613,11 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
           data = await res.json();
         } else {
           const txt = await res.text();
-          throw new Error(`อัปโหลดรูป #${index}: ไม่ใช่ JSON (${res.status}) ${txt.slice(0,80)}`);
+          throw new Error(`${t('repairUploadNotJson')} #${index} (${res.status}) ${txt.slice(0,80)}`);
         }
 
         if (!res.ok || !data?.url) {
-          throw new Error(data?.error || `อัปโหลดรูป #${index} ล้มเหลว (HTTP ${res.status})`);
+          throw new Error(data?.error || `${t('repairUploadFailed')} #${index} (HTTP ${res.status})`);
         }
         return data.url as string;
       } catch (err: any) {
@@ -1624,11 +1627,11 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         if (attempt === MAX_RETRY) break;
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         attempt++;
-        setUploadNote(`รีลองรูป ${index}/${total} (ครั้งที่ ${attempt + 1}) ...`);
+        setUploadNote(t('repairRetryImageN', { current: String(index), total: String(total), attempt: String(attempt + 1) }));
         if (isAbort) continue;
       }
     }
-    throw new Error(lastErr?.message || `อัปโหลดรูป #${index} ไม่สำเร็จ (เครือข่าย)`);
+    throw new Error(lastErr?.message || `${t('repairUploadNetworkFail')} #${index}`);
   };
 
   const saveEdit = async ({ title, detail, status }: { title: string; detail: string; status: Repair['status'] }) => {
@@ -1636,7 +1639,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
     try {
       setUpdateSaving(true);
       const token = await getToken();
-      if (!token) throw new Error('ยังไม่ได้ล็อกอิน');
+      if (!token) throw new Error(t('repairNotLoggedIn'));
 
       const body: any = {};
       if (title.trim() !== selected.title) body.title = title.trim();
@@ -1651,13 +1654,13 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         body: JSON.stringify(body),
       });
       const data: Repair = await res.json();
-      if (!res.ok) throw new Error((data as any)?.error || 'อัปเดตไม่สำเร็จ');
+      if (!res.ok) throw new Error((data as any)?.error || t('repairUpdateFailed'));
 
       setRepairs(prev => prev.map(r => (r.id === data.id ? data : r)));
       setSelected(data);
-      setDetailOpen(false);        // ปิดทันทีเมื่ออัปเดตผ่าน
+      setDetailOpen(false);        // เธเธดเธ”เธ—เธฑเธเธ—เธตเน€เธกเธทเนเธญเธญเธฑเธเน€เธ”เธ•ผ่าน
     } catch (e: any) {
-      showAlert('ผิดพลาด', e?.message || 'อัปเดตไม่สำเร็จ');
+      showAlert(t('repairFailed'), e?.message || t('repairUpdateFailed'));
     } finally { setUpdateSaving(false); }
   };
 
@@ -1667,7 +1670,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
     try {
       setDeleteSaving(true);
       const token = await getToken();
-      if (!token) throw new Error('ยังไม่ได้ล็อกอิน');
+      if (!token) throw new Error(t('repairNotLoggedIn'));
       const res = await fetch(`${getBaseUrl()}/repairs/${selected.id}`, {
         method: 'DELETE',
         headers: { 
@@ -1677,13 +1680,13 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         body: JSON.stringify({ delete_reason: deleteReason || null }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'ลบไม่สำเร็จ');
+      if (!res.ok) throw new Error(data?.error || t('repairDeleteFailed'));
 
       setRepairs(prev => prev.filter(r => r.id !== selected.id));
       setDetailOpen(false);
       setSelected(null);
     } catch (e: any) {
-      showAlert('ผิดพลาด', e?.message || 'ลบไม่สำเร็จ');
+      showAlert(t('repairFailed'), e?.message || t('repairDeleteFailed'));
     } finally { setDeleteSaving(false); }
   };
 
@@ -1698,29 +1701,29 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
 
   const getStatusText = useCallback((status: string) => {
     switch (status) {
-      case 'pending': return 'รอตรวจสอบ';
-      case 'in_progress': return 'กำลังดำเนินการ';
-      case 'done': return 'เสร็จสิ้น';
-      default: return 'ไม่ทราบสถานะ';
+      case 'pending': return t('repairStatusPending');
+      case 'in_progress': return t('repairStatusInProgress');
+      case 'done': return t('repairStatusDone');
+      default: return t('repairStatusUnknown');
     }
-  }, []);
+  }, [t]);
 
   const formatDate = useCallback((dateString: string) => {
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch { return 'ไม่ระบุวันที่'; }
-  }, []);
+    } catch { return t('repairUnknownDate'); }
+  }, [t]);
 
   const getProgressSteps = useCallback((status: string) => {
     const steps = [
-      { key: 'pending', icon: 'document-text-outline', label: 'รออนุมัติ' },
-      { key: 'in_progress', icon: 'refresh-outline', label: 'ดำเนินการ' },
-      { key: 'done', icon: 'checkmark-outline', label: 'เสร็จสิ้น' }
+      { key: 'pending', icon: 'document-text-outline', label: t('repairStepPending') },
+      { key: 'in_progress', icon: 'refresh-outline', label: t('repairStepInProgress') },
+      { key: 'done', icon: 'checkmark-outline', label: t('repairStepDone') }
     ];
     const current = steps.findIndex(s => s.key === status);
     return steps.map((s, i) => ({ ...s, isActive: i <= current, isCompleted: i < current }));
-  }, []);
+  }, [t]);
 
   const renderProgressIndicator = useCallback((status: string) => {
     const steps = getProgressSteps(status);
@@ -1755,12 +1758,12 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
               <Ionicons name="construct-outline" size={18} color={colors.primary} />
               <Text style={[styles.repairTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
             </View>
-            {/* แสดงบ้านเลขที่ */}
+            {/* เนเธชเธ”เธเธเนเธฒเธเน€เธฅเธเธ—ี่ */}
             {item.house_number && (
               <View style={styles.rowCenterMt4}>
                 <Ionicons name="home-outline" size={14} color={colors.subtext} />
                 <Text style={[styles.houseNumberMeta, { color: colors.subtext }]}>
-                  บ้านเลขที่: {item.house_number}
+                  {t('repairHouseNumberLabel')}: {item.house_number}
                 </Text>
               </View>
             )}
@@ -1776,7 +1779,7 @@ const RepairScreen: React.FC<RepairScreenProps> = ({ darkMode: _darkMode = false
         </View>
       </View>
     </TouchableOpacity>
-  ), [colors, formatDate, onPressCard, renderProgressIndicator]);
+  ), [colors, formatDate, onPressCard, renderProgressIndicator, t]);
 
   const SHOW_ALL_TRIGGER = "myh's,f";
   const filteredRepairs = useMemo(() => {
@@ -1842,7 +1845,7 @@ export default RepairScreen;
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  listHeaderContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  listHeaderContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
   searchWithButtonRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, gap: 8, backgroundColor: '#fff' },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 4 },
@@ -1929,7 +1932,7 @@ const styles = StyleSheet.create({
   paddingBottom: 24,
 },
 
-// ใหม่: แถบปุ่มเลือกรูป/ถ่ายรูป ใต้ ScrollView
+// ใหม่: เนเธ–เธเธเธธเนเธกเน€ลือกรูป/เธ–่ายรูป เนเธ•้ ScrollView
 mediaBar: {
   flexDirection: 'row',
   justifyContent: 'center',
@@ -2306,3 +2309,5 @@ stepLineInactive: { backgroundColor: '#E5E7EB' },
 listFooter: { height: 20 },
 listContent: { paddingBottom: 20, flexGrow: 1 },
 });
+
+

@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import { BASE_HOST, BASE_PORT } from './config.ts';
+import { BASE_HOST } from './config.ts';
 import { apiFetchJson } from '../lib/api';
 import debounce from 'lodash/debounce';
+import { useI18n } from '../i18n';
 
 type Props = { darkMode: boolean; onSelectHouse?: (houseNumber: string) => void };
 
-type Status = 'paid' | 'pending' | 'overdue';
+type Status = 'paid' | 'pending' | 'overdue' | 'waiting_approval';
 
 type Item = {
   houseNumber: string;
@@ -16,44 +17,45 @@ type Item = {
 
 type LatestInstallmentRow = {
   house_number: string;
-  status: Status;                 // 'paid' | 'pending' | 'overdue'
+  status: Status;                 // 'paid' | 'pending' | 'overdue' | 'waiting_approval'
   installment_no?: number;
   payment_id?: number;
   due_date?: string;
   period_start?: string;
   period_end?: string;
 };
-
-const ANDROID_HOST = BASE_HOST;
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 }
 
-const statusLabel: Record<Status, string> = {
-  paid: 'ชำระแล้ว',
-  pending: 'รอชำระ',
-  overdue: 'ค้างชำระ',
+const statusLabelKeys: Record<Status, string> = {
+  paid: 'payStatusPaid',
+  pending: 'payStatusPending',
+  overdue: 'payStatusOverdue',
+  waiting_approval: 'payStatusWaitingApproval',
 };
 
 const statusColor: Record<Status, string> = {
   paid: '#26C281',     // เขียว
   pending: '#FFD34D',  // เหลือง
   overdue: '#F05454',  // แดง
+  waiting_approval: '#F59E0B', // สีเหลือง/ส้ม (Warning)
 };
 
 const statusTextColor: Record<Status, string> = {
   paid: '#073B1A',
   pending: '#5A4500',
   overdue: '#5E0000',
+  waiting_approval: '#6B4200',
 };
 
-const MONTHS = [
-  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+const MONTH_KEYS = [
+  'monthFullJan', 'monthFullFeb', 'monthFullMar', 'monthFullApr', 'monthFullMay', 'monthFullJun',
+  'monthFullJul', 'monthFullAug', 'monthFullSep', 'monthFullOct', 'monthFullNov', 'monthFullDec'
 ];
 
 const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
+  const { t } = useI18n();
   const [items, setItems] = useState<Item[]>([]);
   const [searchText, setSearchText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -65,6 +67,11 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1); // 1-12
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState<number>(now.getMonth() + 1);
+  const [pickerYear, setPickerYear] = useState<number>(now.getFullYear());
+  const [yearPickerOpen, setYearPickerOpen] = useState(false);
+  const [yearPageStart, setYearPageStart] = useState<number>(now.getFullYear() - 4);
 
   // Stats
   const counts = useMemo(() => {
@@ -72,7 +79,7 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
       (acc, cur) => {
         acc[cur.status] += 1; return acc;
       },
-      { paid: 0, pending: 0, overdue: 0 } as Record<Status, number>
+      { paid: 0, pending: 0, overdue: 0, waiting_approval: 0 } as Record<Status, number>
     );
   }, [items]);
 
@@ -109,12 +116,12 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
              const hn = String(r.house_number || '').trim();
              const st = r.status;
              if (!hn) return null;
-             // ถ้ามี month/year ที่เลือก Status ควรจะสะท้อนตามงวดที่ได้มา
-             // ซึ่ง backend กรองมาให้แล้วว่าคืองวดที่ cover เดือนนั้น
-             // ดังนั้น status ของงวดนั้นก็คือสถานะของเดือนนั้น
+             // เธ–้ามี month/year เธ—เธตเนเน€ลือก Status เธเธงเธฃเธเธฐเธชเธฐเธ—เนเธญเธเธ•เธฒเธกเธเธงเธ”เธ—เธตเนเนเธ”้มา
+             // ซึ่ง backend เธเธฃเธญเธเธกเธฒเนเธซเนเนเธฅเนเธงเธงเนเธฒเธเธทเธญเธเธงเธ”เธ—ี่ cover เน€เธ”ือนนั้น
+             // เธ”ังนั้น status เธเธญเธเธเธงเธ”เธเธฑเนเธเธเนเธเธทเธญเธชเธ–เธฒเธเธฐเธเธญเธเน€เธ”ือนนั้น
              return {
                houseNumber: hn,
-               status: st === 'paid' || st === 'pending' || st === 'overdue' ? st : 'pending',
+               status: st === 'paid' || st === 'pending' || st === 'overdue' || st === 'waiting_approval' ? st : 'pending',
              } as Item;
            })
            .filter(Boolean) as Item[];
@@ -125,11 +132,11 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
        // Fallback logic removed for clarity as per backend changes
        setItems([]);
      } catch (e: any) {
-       setError((e as any)?.message || 'โหลดข้อมูลไม่สำเร็จ');
+       setError((e as any)?.message || t('payLoadFailed'));
      } finally {
        setLoading(false);
      }
-   }, []);
+   }, [t]);
 
    // Debounced fetch for search text
    const debouncedFetch = useMemo(
@@ -170,9 +177,46 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
       setSelectedYear(d.getFullYear());
   };
 
+  const displayYear = (y: number) => y + 543;
+
+  const openMonthYearPicker = () => {
+    setPickerMonth(selectedMonth);
+    setPickerYear(selectedYear);
+    setYearPickerOpen(false);
+    setPickerVisible(true);
+  };
+
+  const applyPicker = () => {
+    setSelectedMonth(pickerMonth);
+    setSelectedYear(pickerYear);
+    setYearPickerOpen(false);
+    setPickerVisible(false);
+  };
+
+  const setPickerToToday = () => {
+    const d = new Date();
+    setPickerMonth(d.getMonth() + 1);
+    setPickerYear(d.getFullYear());
+  };
+
+  const openYearPickerPopup = () => {
+    setYearPageStart(pickerYear - 4);
+    setPickerVisible(false);
+    setYearPickerOpen(true);
+  };
+
+  const closeYearPickerBackToMonth = () => {
+    setYearPickerOpen(false);
+    setPickerVisible(true);
+  };
+
+  const yearOptions = useMemo(() => {
+    return Array.from({ length: 9 }, (_, i) => yearPageStart + i);
+  }, [yearPageStart]);
+
   const renderLegend = () => (
     <View style={styles.legendRow}>
-      {(['paid', 'pending', 'overdue'] as Status[]).map((s) => {
+      {(['paid', 'waiting_approval', 'pending', 'overdue'] as Status[]).map((s) => {
         const active = statusFilter === s;
         return (
           <TouchableOpacity
@@ -182,7 +226,7 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
           >
             <View style={[styles.legendDot, { backgroundColor: statusColor[s] }]} />
             <Text style={[styles.legendText, active ? styles.legendTextActive : { color: colors.text }]}>
-              {statusLabel[s]} ({counts[s]})
+              {t(statusLabelKeys[s])} ({counts[s]})
             </Text>
           </TouchableOpacity>
         );
@@ -207,7 +251,7 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
             <TextInput
               value={searchText}
               onChangeText={setSearchText}
-              placeholder="ค้นหาเลขที่บ้าน"
+              placeholder={t('paySearchHouse')}
               placeholderTextColor={colors.subtext}
               style={[styles.input, { color: colors.text, borderColor: colors.border }]}
               keyboardType="number-pad"
@@ -227,23 +271,168 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
           <TouchableOpacity onPress={() => handleMonthChange(-1)} style={styles.monthNavBtn}>
             <Ionicons name="chevron-back" size={20} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.monthText, { color: colors.text }]}>
-            {MONTHS[selectedMonth - 1]} {selectedYear + 543}
-          </Text>
+
+          <TouchableOpacity onPress={openMonthYearPicker} style={styles.monthLabelBtn} activeOpacity={0.85}>
+            <Text style={[styles.monthText, { color: colors.text }]}>
+              {t(MONTH_KEYS[selectedMonth - 1])} {displayYear(selectedYear)}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={() => handleMonthChange(1)} style={styles.monthNavBtn}>
             <Ionicons name="chevron-forward" size={20} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity onPress={setToday} style={[styles.todayBtn, { backgroundColor: colors.primary }]}>
-            <Text style={styles.todayBtnText}>เดือนปัจจุบัน</Text>
+            <Text style={styles.todayBtnText}>{t('payCurrentMonth')}</Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={pickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setYearPickerOpen(false);
+          setPickerVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.pickerBackdrop}
+          onPress={() => {
+            setYearPickerOpen(false);
+            setPickerVisible(false);
+          }}
+        />
+        <View style={styles.pickerWrap} pointerEvents="box-none">
+          <View style={[styles.pickerCard, { backgroundColor: colors.bg, borderColor: colors.border }]}> 
+            <View style={styles.pickerHeader}>
+              <Text style={[styles.pickerTitle, { color: colors.text }]}>
+                {t('paySelectMonthYear')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setYearPickerOpen(false);
+                  setPickerVisible(false);
+                }}
+                style={styles.pickerCloseBtn}
+              >
+                <Ionicons name="close" size={18} color={colors.subtext} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerYearRow}>
+              <TouchableOpacity
+                style={[styles.pickerYearSelectBtn, { borderColor: colors.border }]}
+                onPress={openYearPickerPopup}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.pickerYearText, { color: colors.text }]}>{displayYear(pickerYear)}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerMonthsGrid}>
+              {MONTH_KEYS.map((k, idx) => {
+                const m = idx + 1;
+                const active = pickerMonth === m;
+                return (
+                  <TouchableOpacity
+                    key={k}
+                    onPress={() => setPickerMonth(m)}
+                    style={[
+                      styles.pickerMonthChip,
+                      active ? styles.pickerMonthChipActive : styles.pickerMonthChipInactive,
+                      active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                      !active && { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.pickerMonthChipText, active ? styles.whiteText : { color: colors.text }]}> 
+                      {t(k)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.pickerActionsRow}>
+              <TouchableOpacity onPress={setPickerToToday} style={[styles.pickerActionBtn, styles.pickerActionBtnGhost, { borderColor: colors.border }]}> 
+                <Text style={[styles.pickerActionText, { color: colors.text }]}>{t('payCurrentMonth')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={applyPicker} style={[styles.pickerActionBtn, styles.pickerActionBtnPrimary, { backgroundColor: colors.primary, borderColor: colors.primary }]}> 
+                <Text style={[styles.pickerActionText, styles.whiteText]}>{t('payApply')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={yearPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeYearPickerBackToMonth}
+      >
+        <Pressable style={styles.yearModalBackdrop} onPress={closeYearPickerBackToMonth} />
+        <View style={styles.yearModalWrap} pointerEvents="box-none">
+          <View style={styles.yearModalCard}> 
+            <View style={styles.yearModalHeader}>
+              <Text style={styles.yearModalTitle}>{t('paySelectYear')}</Text>
+              <TouchableOpacity onPress={closeYearPickerBackToMonth} style={styles.pickerCloseBtn}>
+                <Ionicons name="close" size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerYearsWrap}>
+              {yearOptions.map((y) => {
+                const active = y === pickerYear;
+                return (
+                  <TouchableOpacity
+                    key={String(y)}
+                    onPress={() => {
+                      setPickerYear(y);
+                      setYearPickerOpen(false);
+                      setPickerVisible(true);
+                    }}
+                    style={[
+                      styles.pickerYearChip,
+                      active ? styles.pickerYearChipActive : styles.pickerYearChipInactive,
+                    ]}
+                  >
+                    <Text style={[styles.pickerYearChipText, active ? styles.pickerYearChipTextActive : styles.pickerYearChipTextInactive]}> 
+                      {displayYear(y)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.yearPagerRow}>
+              <TouchableOpacity
+                style={[styles.yearPagerBtn, { borderColor: colors.border }]}
+                onPress={() => setYearPageStart(s => s - 9)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="chevron-back" size={16} color={colors.text} />
+                <Text style={[styles.yearPagerText, { color: colors.text }]}>{t('payPrevPage')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.yearPagerBtn, { borderColor: colors.border }]}
+                onPress={() => setYearPageStart(s => s + 9)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.yearPagerText, { color: colors.text }]}>{t('payNextPage')}</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {renderLegend()}
       
       {error ? (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>เกิดข้อผิดพลาด: {error}</Text>
+          <Text style={styles.errorText}>{t('payError')}: {error}</Text>
         </View>
       ) : null}
 
@@ -268,7 +457,7 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
                 { backgroundColor: statusColor[item.status], shadowColor: colors.cardShadow }
               ]}
             >
-              <Text style={[styles.cellTitle, { color: statusTextColor[item.status] }]}>บ้านเลขที่</Text>
+              <Text style={[styles.cellTitle, { color: statusTextColor[item.status] }]}>{t('payHouseNumber')}</Text>
               <Text style={[styles.cellValue, { color: statusTextColor[item.status] }]}>{item.houseNumber}</Text>
             </TouchableOpacity>
           </View>
@@ -276,7 +465,7 @@ const PaymentStatus: React.FC<Props> = ({ darkMode, onSelectHouse }) => {
       />
       {(!loading && visibleItems.length === 0) && (
         <View style={styles.emptyContainer}>
-          <Text style={{ color: colors.text }}>ไม่พบบ้านเลขที่ที่ค้นหา</Text>
+          <Text style={{ color: colors.text }}>{t('payHouseNotFoundSearch')}</Text>
         </View>
       )}
     </View>
@@ -340,6 +529,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     textAlign: 'center',
+  },
+  monthLabelBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   todayBtn: {
     paddingHorizontal: 14,
@@ -413,6 +609,217 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 20,
   },
+  yearModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(17, 24, 39, 0.2)',
+  },
+  yearModalWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+  },
+  yearModalCard: {
+    width: '100%',
+    maxWidth: 390,
+    borderRadius: 18,
+    borderWidth: 0,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#111827',
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 6,
+  },
+  yearModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  yearModalTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  pickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+  },
+  pickerWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  pickerCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  pickerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  pickerCloseBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  pickerYearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  pickerYearSelectBtn: {
+    minHeight: 34,
+    minWidth: 112,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  pickerYearNavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerYearText: {
+    fontSize: 18,
+    fontWeight: '800',
+    minWidth: 92,
+    textAlign: 'center',
+  },
+  pickerYearsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 6,
+    justifyContent: 'space-between',
+  },
+  pickerYearChip: {
+    width: '31%',
+    minHeight: 38,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 0,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerYearChipActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#4F46E5',
+  },
+  pickerYearChipInactive: {
+    backgroundColor: '#F4F5F7',
+    borderColor: '#E5E7EB',
+  },
+  pickerYearChipText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  pickerYearChipTextActive: {
+    color: '#FFFFFF',
+  },
+  pickerYearChipTextInactive: {
+    color: '#374151',
+  },
+  yearPagerRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  yearPagerBtn: {
+    flex: 1,
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#F9FAFB',
+  },
+  yearPagerText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pickerMonthsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  pickerMonthChip: {
+    width: '31.2%',
+    borderWidth: 1,
+    borderRadius: 10,
+    minHeight: 38,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerMonthChipActive: {
+    borderColor: '#4F46E5',
+  },
+  pickerMonthChipInactive: {
+    backgroundColor: '#FFFFFF',
+  },
+  pickerMonthChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  pickerActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 12,
+  },
+  pickerActionBtn: {
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pickerActionBtnGhost: {
+    backgroundColor: '#F5F6F8',
+  },
+  pickerActionBtnPrimary: {
+    minWidth: 74,
+    alignItems: 'center',
+  },
+  pickerActionText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  whiteText: {
+    color: '#FFFFFF',
+  },
 });
 
 export default PaymentStatus;
+
+

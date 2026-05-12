@@ -1,6 +1,8 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import type { MenuItem } from '../types';
+import { useI18n } from '../i18n';
 
 type User = {
   id: number | string;
@@ -21,8 +23,6 @@ type SidebarProps = {
   adminDividerIndex?: number;
 };
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
 const Sidebar: React.FC<SidebarProps> = ({ 
   darkMode,  
   visible, 
@@ -32,15 +32,25 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   adminDividerIndex,
 }) => {
-  const anim = useRef(new Animated.Value(-250)).current;
+  const { t } = useI18n();
+  const sidebarWidth = Math.max(170, Math.min(280, Math.round(wp('56%'))));
+  const sidebarHeight = Math.round(hp('100%'));
+  const sidebarPadding = Math.max(14, Math.round(wp('4.4%')));
+  const sidebarPaddingTop = Math.max(48, Math.round(hp('6.8%')));
+  const menuFontSize = Math.max(14, Math.min(16, Math.round(wp('3.9%'))));
+  const userNameFontSize = Math.max(16, Math.min(18, Math.round(wp('4.4%'))));
+  const subFontSize = Math.max(9, Math.min(12, Math.round(wp('3%'))));
+  const menuItemPaddingV = Math.max(9, Math.round(hp('1.3%')));
+  const menuItemPaddingH = Math.max(6, Math.round(wp('2.3%')));
+  const anim = useRef(new Animated.Value(-320)).current;
 
   useEffect(() => {
     Animated.timing(anim, { 
-      toValue: visible ? 0 : -250, 
+      toValue: visible ? 0 : -sidebarWidth,
       duration: 300, 
       useNativeDriver: false 
     }).start();
-  }, [visible]);
+  }, [visible, anim, sidebarWidth]);
 
   const textColor = darkMode ? '#fff' : '#000';
   const subColor  = darkMode ? '#B0BEC5' : '#666';
@@ -57,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return 8; // สำหรับข้อความที่ยาวมาก
   };
 
-  const fullNameFontSize = getDynamicFontSize(currentUser?.full_name);
+  const fullNameFontSize = Math.min(getDynamicFontSize(currentUser?.full_name), subFontSize);
 
   return (
     <>
@@ -74,16 +84,16 @@ const Sidebar: React.FC<SidebarProps> = ({
         darkMode && styles.sidebarDark, 
         { 
           left: anim,
-          height: screenHeight,
-          maxWidth: screenWidth * 0.5,
+          width: sidebarWidth,
+          height: sidebarHeight,
         }
       ]}>
-        <View style={styles.sidebarContent}>
+        <View style={[styles.sidebarContent, { padding: sidebarPadding, paddingTop: sidebarPaddingTop }]}>
 
           {/* ✅ ส่วนหัวผู้ใช้ */}
           <View style={styles.userHeader}>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.userName, { color: textColor }]}>
+            <View style={styles.userHeaderContent}>
+              <Text style={[styles.userName, { color: textColor, fontSize: userNameFontSize }]}>
                 UID : {currentUser?.username || 'Guest'}
               </Text>
               <Text 
@@ -99,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 Name : {currentUser?.full_name}
               </Text>
               {!!currentUser?.phone && (
-                <Text style={[styles.userSub, { color: subColor, fontSize: 11 }]}>
+                <Text style={[styles.userSub, { color: subColor, fontSize: subFontSize }]}> 
                   Tel : {currentUser.phone}
                 </Text>
               )}
@@ -107,7 +117,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           </View>
           
           {/* เมนู */}
-          <View style={styles.menuContainer}>
+          <ScrollView
+            style={styles.menuContainer}
+            contentContainerStyle={styles.menuContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             {menuItems.map((item, i) => (
               <React.Fragment key={i}>
                 {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && typeof adminDividerIndex === 'number' && i === adminDividerIndex && (
@@ -115,27 +130,31 @@ const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 <TouchableOpacity 
                   onPress={() => { item.onPress(); onClose(); }}
-                  style={[styles.menuItem, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                  style={[styles.menuItem, styles.menuItemRow, { paddingVertical: menuItemPaddingV, paddingHorizontal: menuItemPaddingH }]}
                 >
-                  <Text style={[styles.sidebarItem, { color: textColor }]}>
+                  <Text
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={[styles.sidebarItem, styles.menuLabel, { color: textColor, fontSize: menuFontSize }]}
+                  >
                     {item.label}
                   </Text>
                   {item.showRedDot && (
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' }} />
+                    <View style={styles.redDot} />
                   )}
                 </TouchableOpacity>
               </React.Fragment>
             ))}
-          </View>
+          </ScrollView>
 
           {/* Logout */}
           <View style={styles.sidebarBottom}>
             <TouchableOpacity 
               onPress={() => { onLogout(); onClose(); }}
-              style={styles.menuItem}
+              style={[styles.menuItem, { paddingVertical: menuItemPaddingV, paddingHorizontal: menuItemPaddingH }]}
             >
-              <Text style={[styles.sidebarItem, { color: textColor }]}>
-                🚪 Logout
+              <Text style={[styles.sidebarItem, { color: textColor, fontSize: menuFontSize }]}> 
+                {t('logout')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -168,14 +187,16 @@ const styles = StyleSheet.create({
   sidebarDark: { backgroundColor: '#222' },
   sidebarContent: {
     flex: 1,
-    padding: 20,
-    paddingTop: 60,
-    justifyContent: 'space-between',
+    minHeight: 0,
   },
   userHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  userHeaderContent: {
+    flex: 1,
+    marginLeft: 10,
   },
   userName: { 
     fontWeight: 'bold', 
@@ -186,7 +207,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     // ไม่กำหนด fontSize ที่นี่ เพราะจะใช้ dynamic fontSize
   },
-  menuContainer: { flex: 1 },
+  menuContainer: { flex: 1, minHeight: 0 },
+  menuContent: { paddingBottom: 8 },
   divider: {
     height: 1,
     backgroundColor: '#e5e7eb',
@@ -198,9 +220,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 4,
   },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: 8,
+  },
+  redDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+  },
   sidebarItem: { fontSize: 16 },
+  menuLabel: { flex: 1, flexShrink: 1 },
   sidebarBottom: {
-    marginTop: 20,
+    marginTop: 12,
     paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#eee',

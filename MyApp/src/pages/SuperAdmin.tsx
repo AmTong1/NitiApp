@@ -3,10 +3,12 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Platform, ActivityIndicator, StatusBar, ScrollView
 } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_HOST, BASE_PORT } from './config';
+import { BASE_HOST } from './config';
 import colors from '../constants/colors';
+import { useI18n } from '../i18n';
 
 // Import Pages
 import ApprovalsPage from './superadmin/ApprovalsPage';
@@ -17,12 +19,10 @@ import PaymentLogsPage from './superadmin/PaymentLogsPage';
 import RepairLogsPage from './superadmin/RepairLogsPage';
 import ResidentLogsPage from './superadmin/ResidentLogsPage';
 import AnnouncementLogsPage from './superadmin/AnnouncementLogsPage';
-
-const ANDROID_HOST = BASE_HOST;
+import FinancialVisibilityLogsPage from './superadmin/FinancialVisibilityLogsPage';
 
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 }
 
 type Me = {
@@ -38,9 +38,10 @@ interface SuperAdminScreenProps {
 }
 
 const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, onMenuPress }) => {
+  const { t } = useI18n();
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'approvals' | 'logs' | 'admins' | 'settings' | 'paymentLogs' | 'repairLogs' | 'residentLogs' | 'announcementLogs'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'approvals' | 'logs' | 'admins' | 'settings' | 'paymentLogs' | 'repairLogs' | 'residentLogs' | 'announcementLogs' | 'finVisibilityLogs'>('dashboard');
   const [waitingCount, setWaitingCount] = useState(0);
 
   const fetchMe = async () => {
@@ -63,13 +64,30 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
   const fetchWaitingCount = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(`${getBaseUrl()}/payment-installments/waiting-approval`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setWaitingCount(data.data?.length || 0);
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      const [resPayment, resFinancial, resVis] = await Promise.all([
+        fetch(`${getBaseUrl()}/payment-installments/waiting-approval`, { headers }),
+        fetch(`${getBaseUrl()}/financial/waiting-approval`, { headers }),
+        fetch(`${getBaseUrl()}/financial/visibility/logs`, { headers })
+      ]);
+      
+      let total = 0;
+      if (resPayment.ok) {
+        const data = await resPayment.json();
+        total += data.data?.length || 0;
       }
+      if (resFinancial.ok) {
+        const data = await resFinancial.json();
+        total += data.data?.length || 0;
+      }
+      if (resVis.ok) {
+        const data = await resVis.json();
+        const pending = (data.data || []).filter((item: any) => item.status === 'waiting_approval');
+        total += pending.length;
+      }
+      
+      setWaitingCount(total);
     } catch (error) {
       console.log('Error fetching waiting count:', error);
     }
@@ -104,10 +122,10 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
       <View style={[styles.container, styles.centerContent, { backgroundColor: colors.bg }]}>
         <Ionicons name="lock-closed" size={64} color={colors.danger} />
         <Text style={[styles.noAccessText, { color: colors.text }]}>
-          คุณไม่มีสิทธิ์เข้าถึงหน้านี้
+          {t('saNoAccess')}
         </Text>
         <Text style={[styles.noAccessSubtext, { color: colors.subtext }]}>
-          เฉพาะ SuperAdmin เท่านั้น
+          {t('saOnlySuperAdmin')}
         </Text>
       </View>
     );
@@ -122,6 +140,7 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
   if (currentView === 'repairLogs') return <RepairLogsPage onBack={onBack} darkMode={darkMode} />;
   if (currentView === 'residentLogs') return <ResidentLogsPage onBack={onBack} darkMode={darkMode} />;
   if (currentView === 'announcementLogs') return <AnnouncementLogsPage onBack={onBack} darkMode={darkMode} />;
+  if (currentView === 'finVisibilityLogs') return <FinancialVisibilityLogsPage onBack={onBack} darkMode={darkMode} />;
 
   // Dashboard View
   return (
@@ -132,7 +151,7 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
       <View style={[styles.header, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
          <View style={styles.headerRow}>
             <TouchableOpacity onPress={onMenuPress}>
-              <Ionicons name="menu" size={28} color={colors.text} />
+              <Ionicons name="menu" size={wp('7%')} color={colors.text} />
             </TouchableOpacity>
             <View>
               <Text style={[styles.appName, { color: colors.primary }]}>NitiSmart</Text>
@@ -141,13 +160,13 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
          </View>
          <View style={styles.profileBox}>
             <View style={[styles.avatar, { backgroundColor: colors.warning }]}>
-                <Ionicons name="shield" size={20} color="#fff" />
+                <Ionicons name="shield" size={wp('5%')} color="#fff" />
             </View>
          </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.menuGrid}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>จัดการระบบ</Text>
+        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>{t('saManageSystem')}</Text>
         <View style={styles.cardGrid}>
             {/* Approvals */}
             <TouchableOpacity 
@@ -155,15 +174,15 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 onPress={() => setCurrentView('approvals')}
             >
                 <View style={[styles.iconBox, styles.iconBoxApprovals]}>
-                    <Ionicons name="shield-checkmark" size={32} color="#4F46E5" />
+                    <Ionicons name="shield-checkmark" size={wp('8%')} color="#4F46E5" />
                     {waitingCount > 0 && (
                         <View style={styles.badge}>
                             <Text style={styles.badgeText}>{waitingCount}</Text>
                         </View>
                     )}
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>การอนุมัติ</Text>
-                <Text style={[styles.menuDesc, { color: colors.subtext }]}>ตรวจสอบคำขอแก้ไข</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saApprovals')}</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>{t('saCheckRequests')}</Text>
             </TouchableOpacity>
 
              {/* Admins */}
@@ -174,8 +193,8 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 <View style={[styles.iconBox, styles.iconBoxAdmins]}>
                     <Ionicons name="people" size={32} color="#0EA5E9" />
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>จัดการ Admin</Text>
-                <Text style={[styles.menuDesc, { color: colors.subtext }]}>เพิ่มลบผู้ดูแลระบบ</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saManageAdmin')}</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>{t('saAddRemoveAdmin')}</Text>
             </TouchableOpacity>
 
              {/* Settings */}
@@ -186,12 +205,12 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 <View style={[styles.iconBox, styles.iconBoxSettings]}>
                     <Ionicons name="settings" size={32} color="#6B7280" />
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>ตั้งค่าระบบ</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saSystemSettings')}</Text>
                 <Text style={[styles.menuDesc, { color: colors.subtext }]}>PromptPay, Rates</Text>
             </TouchableOpacity>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>ประวัติ / Logs</Text>
+        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>{t('saHistoryLogs')}</Text>
         <View style={styles.cardGrid}>
             {/* Payment Logs */}
             <TouchableOpacity 
@@ -201,8 +220,8 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 <View style={[styles.iconBox, styles.iconBoxPayment]}>
                     <Ionicons name="receipt" size={32} color="#10B981" />
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>ประวัติการชำระ</Text>
-                <Text style={[styles.menuDesc, { color: colors.subtext }]}>ตรวจสอบรายการโอน</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saPaymentHistory')}</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>{t('saCheckTransfers')}</Text>
             </TouchableOpacity>
 
             {/* Repair Logs */}
@@ -213,8 +232,8 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 <View style={[styles.iconBox, styles.iconBoxRepair]}>
                     <Ionicons name="construct" size={32} color="#F97316" />
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>ประวัติแจ้งซ่อม</Text>
-                <Text style={[styles.menuDesc, { color: colors.subtext }]}>ดูรายการแจ้งซ่อม</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saRepairHistory')}</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>{t('saViewRepairs')}</Text>
             </TouchableOpacity>
 
             {/* Delete Logs */}
@@ -225,8 +244,8 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 <View style={[styles.iconBox, styles.iconBoxLogs]}>
                     <Ionicons name="trash-bin" size={32} color="#EF4444" />
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>ประวัติการลบ</Text>
-                <Text style={[styles.menuDesc, { color: colors.subtext }]}>ดู Logs ย้อนหลัง</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saDeleteHistory')}</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>{t('saViewLogs')}</Text>
             </TouchableOpacity>
 
             {/* Resident Logs */}
@@ -237,8 +256,8 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 <View style={[styles.iconBox, styles.iconBoxResident]}>
                     <Ionicons name="people" size={32} color="#8B5CF6" />
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>ประวัติผู้อยู่อาศัย</Text>
-                <Text style={[styles.menuDesc, { color: colors.subtext }]}>เพิ่ม/แก้ไข/ลบ/เดือน</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saResidentHistory')}</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>{t('saResidentDesc')}</Text>
             </TouchableOpacity>
 
             {/* Announcement Logs */}
@@ -249,8 +268,20 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
                 <View style={[styles.iconBox, styles.iconBoxAnnouncement]}>
                     <Ionicons name="megaphone" size={32} color="#0EA5E9" />
                 </View>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>ประวัติประกาศ</Text>
-                <Text style={[styles.menuDesc, { color: colors.subtext }]}>เพิ่ม/แก้ไข/ลบ</Text>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>{t('saAnnouncementHistory')}</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>{t('saAnnouncementDesc')}</Text>
+            </TouchableOpacity>
+
+            {/* Financial Visibility Logs */}
+            <TouchableOpacity 
+                style={[styles.menuCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                onPress={() => setCurrentView('finVisibilityLogs')}
+            >
+                <View style={[styles.iconBox, styles.iconBoxFinVis]}>
+                    <Ionicons name="eye-outline" size={32} color="#10B981" />
+                </View>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>ประวัติเปิด/ปิดยอดเงิน</Text>
+                <Text style={[styles.menuDesc, { color: colors.subtext }]}>อนุมัติการแสดงผลยอด</Text>
             </TouchableOpacity>
         </View>
 
@@ -262,20 +293,20 @@ const SuperAdminScreen: React.FC<SuperAdminScreenProps> = ({ darkMode = false, o
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    padding: 20,
-    paddingTop: Platform.OS === 'android' ? 20 : 60,
+    padding: wp('5%'),
+    paddingTop: Platform.OS === 'android' ? wp('5%') : hp('7.5%'),
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   appName: {
-      fontSize: 14,
+      fontSize: wp('3.5%'),
       fontWeight: '600',
-      marginBottom: 2,
+      marginBottom: hp('0.3%'),
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: wp('6%'),
     fontWeight: '700',
   },
   profileBox: {
@@ -283,45 +314,45 @@ const styles = StyleSheet.create({
       alignItems: 'center',
   },
   avatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: wp('10%'),
+      height: wp('10%'),
+      borderRadius: wp('5%'),
       justifyContent: 'center',
       alignItems: 'center',
   },
   noAccessText: {
-    fontSize: 20,
+    fontSize: wp('5%'),
     fontWeight: '600',
-    marginTop: 16,
+    marginTop: hp('2%'),
   },
   noAccessSubtext: {
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: wp('3.5%'),
+    marginTop: hp('0.5%'),
   },
   menuGrid: {
-      padding: 16,
+      padding: wp('4%'),
   },
   sectionTitle: {
-      fontSize: 16,
+      fontSize: wp('4%'),
       fontWeight: '600',
-      marginBottom: 16,
-      marginLeft: 4,
+      marginBottom: hp('2%'),
+      marginLeft: wp('1%'),
   },
   cardGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
-      rowGap: 12,
-      marginBottom: 8,
+      rowGap: hp('1.5%'),
+      marginBottom: hp('1%'),
   },
   menuCard: {
       width: '48%',
-      padding: 20,
-      borderRadius: 16,
+      padding: wp('5%'),
+      borderRadius: wp('4%'),
       borderWidth: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      height: 160,
+      height: hp('20%'),
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.05,
@@ -329,12 +360,12 @@ const styles = StyleSheet.create({
       elevation: 2,
   },
   iconBox: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: wp('16%'),
+      height: wp('16%'),
+      borderRadius: wp('8%'),
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: hp('1.5%'),
       position: 'relative',
   },
   badge: {
@@ -342,9 +373,9 @@ const styles = StyleSheet.create({
      top: -4,
      right: -4,
      backgroundColor: '#EF4444',
-     minWidth: 24,
-     height: 24,
-     borderRadius: 12,
+     minWidth: wp('6%'),
+     height: wp('6%'),
+     borderRadius: wp('3%'),
      justifyContent: 'center',
      alignItems: 'center',
      borderWidth: 2,
@@ -352,17 +383,17 @@ const styles = StyleSheet.create({
   },
   badgeText: {
       color: '#fff',
-      fontSize: 12,
+      fontSize: wp('3%'),
       fontWeight: '700',
-      paddingHorizontal: 4,
+      paddingHorizontal: wp('1%'),
   },
   menuTitle: {
-      fontSize: 16,
+      fontSize: wp('4%'),
       fontWeight: '600',
-      marginBottom: 4,
+      marginBottom: hp('0.5%'),
   },
   menuDesc: {
-      fontSize: 12,
+      fontSize: wp('3%'),
   },
   centerContent: {
       justifyContent: 'center',
@@ -371,7 +402,7 @@ const styles = StyleSheet.create({
   headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: wp('3%'),
   },
   iconBoxApprovals: { backgroundColor: '#EEF2FF' },
   iconBoxPayment: { backgroundColor: '#ECFDF5' },
@@ -381,7 +412,10 @@ const styles = StyleSheet.create({
   iconBoxLogs: { backgroundColor: '#FEF2F2' },
   iconBoxResident: { backgroundColor: '#F5F3FF' },
   iconBoxAnnouncement: { backgroundColor: '#E0F2FE' },
+  iconBoxFinVis: { backgroundColor: '#ECFDF5' },
 
 });
 
 export default SuperAdminScreen;
+
+

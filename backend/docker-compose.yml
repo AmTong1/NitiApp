@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: unless-stopped
+    # --- ลบส่วน depends_on ออกจากตรงนี้ ---
+    environment:
+      HOST: 192.168.1.101
+      PORT: 5765
+      DB_HOST: tanutchapol.trueddns.com  # แนะนำ: ถ้า Backend กับ DB อยู่เครื่องเดียวกัน ให้ใช้ IP ภายในจะเร็วและเสถียรกว่า DDNS ครับ
+      DB_PORT: 47332
+      DB_USER: root
+      DB_PASS: Myproj
+      DB_NAME: MyPJ
+      JWT_SECRET: ProjectSecret
+      JWT_EXPIRES: 30d
+      ADMIN_KEY: SUPER_SECRET_ADMIN_KEY
+      PUPPETEER_HEADLESS: new
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      QR_RETENTION_DAYS: 3
+    ports:
+      - "5419:5765"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./qrs:/app/qrs
+      - ./pdfs:/app/pdfs
+
+# ลบ volumes: mysql_data: ด้านล่างออกด้วยครับถ้าไม่ได้ใช้งานในไฟล์นี้

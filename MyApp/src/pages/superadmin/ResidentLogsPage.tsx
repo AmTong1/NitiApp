@@ -3,9 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator, Platform
 } from 'react-native';
+
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrl } from '../SuperAdmin';
+import { formatThaiDateTime, toSortableMs } from '../../lib/datetime';
 
 const themeColors = {
   primary: '#4F46E5',
@@ -37,18 +39,6 @@ interface ResidentLogsPageProps {
   onBack: () => void;
   darkMode?: boolean;
 }
-
-const formatDate = (dateString: string) => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  return d.toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 const ACTION_CONFIG: Record<string, { label: string; icon: string; color: string; bgColor: string }> = {
   create: { label: 'เพิ่มใหม่', icon: 'add-circle', color: '#10B981', bgColor: '#ECFDF5' },
@@ -145,8 +135,8 @@ const ResidentLogsPage: React.FC<ResidentLogsPageProps> = ({ onBack }) => {
     }
 
     data.sort((a, b) => {
-      const dateA = new Date(a.created_at).getTime();
-      const dateB = new Date(b.created_at).getTime();
+      const dateA = toSortableMs(a.created_at);
+      const dateB = toSortableMs(b.created_at);
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
 
@@ -253,7 +243,7 @@ const ResidentLogsPage: React.FC<ResidentLogsPageProps> = ({ onBack }) => {
             <Ionicons name={config.icon as any} size={14} color={actionIconColor} />
             <Text style={[styles.actionBadgeText, actionBadgeTextStyle]}>{config.label}</Text>
           </View>
-          <Text style={[styles.logDate, styles.textSubtext]}>{formatDate(item.created_at)}</Text>
+          <Text style={[styles.logDate, styles.textSubtext]}>{formatThaiDateTime(item.created_at)}</Text>
         </View>
 
         {/* Resident info */}
@@ -336,7 +326,7 @@ const ResidentLogsPage: React.FC<ResidentLogsPageProps> = ({ onBack }) => {
       {/* Search + Sort */}
       <View style={styles.searchContainer}>
         <View style={styles.searchRow}>
-          <View style={[styles.searchInputWrapper, { flex: 1 }]}>
+          <View style={[styles.searchInputWrapper, styles.flex1]}>
             <Ionicons name="search" size={18} color={colors.subtext} />
             <TextInput
               style={[styles.searchInput, styles.textPrimary]}
@@ -441,6 +431,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 20, fontWeight: '700' },
+  flex1: { flex: 1 },
   textPrimary: { color: themeColors.text },
   textSubtext: { color: themeColors.subtext },
 

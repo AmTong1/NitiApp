@@ -3,17 +3,17 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Linking, Platform, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, RefreshControl,
 } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { showAlert } from '../components/GlobalAlert';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_HOST, BASE_PORT } from './config.ts';
-const ANDROID_HOST = BASE_HOST;
+import { BASE_HOST } from './config.ts';
+import { useI18n } from '../i18n';
 type Contact = { id: number; title: string; number: string };
 type Role = 'admin' | 'user' | 'superadmin';
 
 export function getBaseUrl() {
-  const host = Platform.OS === 'android' ? ANDROID_HOST : BASE_HOST;
-  return `http://${host}:${BASE_PORT}`;
+  return BASE_HOST;
 }
 
 
@@ -28,6 +28,7 @@ const ContactFormModal: React.FC<{
   onClose: () => void;
   onSubmit: (payload: { title: string; number: string }) => void;
 }> = ({ visible, darkMode, colors, mode, initial, saving, onClose, onSubmit }) => {
+  const { t } = useI18n();
   const [title, setTitle] = useState(initial?.title ?? '');
   const [number, setNumber] = useState(initial?.number ?? '');
 
@@ -38,11 +39,11 @@ const ContactFormModal: React.FC<{
 
   const submit = () => {
     if (!title.trim() || !number.trim()) {
-      showAlert('กรอกไม่ครบ', 'กรุณากรอกชื่อและหมายเลขให้ครบ');
+      showAlert(t('callIncomplete'), t('callFillAll'));
       return;
     }
     if (!/^\d{3,20}$/.test(number.trim())) {
-      showAlert('หมายเลขไม่ถูกต้อง', 'กรุณากรอกเฉพาะตัวเลข 3–20 หลัก');
+      showAlert(t('callInvalidNumber'), t('callNumberDigits'));
       return;
     }
     onSubmit({ title: title.trim(), number: number.trim() });
@@ -55,25 +56,25 @@ const ContactFormModal: React.FC<{
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalCenter}>
             <View style={[styles.modalCard, { backgroundColor: colors.cardBg, borderColor: colors.line }]}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {mode === 'add' ? 'เพิ่มรายการ' : 'แก้ไขรายการ'}
+                {mode === 'add' ? t('callAddItem') : t('callEditItem')}
               </Text>
 
-              <Text style={[styles.modalLabel, styles.modalLabelNumber, { color: colors.subtext }]}>ชื่อ</Text>
+              <Text style={[styles.modalLabel, styles.modalLabelNumber, { color: colors.subtext }]}>{t('callName')}</Text>
               <TextInput
                 value={title}
                 onChangeText={setTitle}
-                placeholder="เช่น หน่วยกู้ภัย"
+                placeholder={t('callNamePlaceholder')}
                 placeholderTextColor={darkMode ? '#888' : '#9AA3AB'}
                 style={[styles.input, { color: colors.text, borderColor: colors.line }]}
                 maxLength={60}
                 returnKeyType="next"
               />
 
-              <Text style={[styles.modalLabel, styles.modalLabelNumber, { color: colors.subtext }]}>หมายเลข</Text>
+              <Text style={[styles.modalLabel, styles.modalLabelNumber, { color: colors.subtext }]}>{t('callNumber')}</Text>
               <TextInput
                 value={number}
                 onChangeText={setNumber}
-                placeholder="เช่น 1669"
+                placeholder={t('callNumberPlaceholder')}
                 placeholderTextColor={darkMode ? '#888' : '#9AA3AB'}
                 style={[styles.input, { color: colors.text, borderColor: colors.line }]}
                 keyboardType="number-pad"
@@ -83,11 +84,11 @@ const ContactFormModal: React.FC<{
 
               <View style={styles.modalActions}>
                 <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={onClose} disabled={saving}>
-                  <Text style={styles.modalCancelText}>ยกเลิก</Text>
+                  <Text style={styles.modalCancelText}>{t('cancel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.modalBtn, styles.modalSave]} onPress={submit} disabled={saving}>
-                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalSaveText}>บันทึก</Text>}
+                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalSaveText}>{t('save')}</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -101,24 +102,30 @@ const ContactFormModal: React.FC<{
 // ---------- Extracted stable components ----------
 const CallItemSeparator = () => <View style={styles.separator} />;
 
-const CallListHeader: React.FC<{ themeColors: any }> = ({ themeColors }) => (
-  <View style={[styles.header, { backgroundColor: themeColors.bg }]}>
-    <Text style={[styles.headerTitle, { color: themeColors.text }]}>📞 เบอร์โทรฉุกเฉิน</Text>
-    <Text style={[styles.headerSubtitle, { color: themeColors.subtext }]}>รายการติดต่อสำคัญ</Text>
-  </View>
-);
+const CallListHeader: React.FC<{ themeColors: any }> = ({ themeColors }) => {
+  const { t } = useI18n();
+  return (
+    <View style={[styles.header, { backgroundColor: themeColors.bg }]}>
+      <Text style={[styles.headerTitle, { color: themeColors.text }]}>{t('callTitle')}</Text>
+      <Text style={[styles.headerSubtitle, { color: themeColors.subtext }]}>{t('callImportantContacts')}</Text>
+    </View>
+  );
+};
 
-const CallListFooter: React.FC<{ role: Role; onAdd: () => void }> = ({ role, onAdd }) =>
-  (role !== 'admin' && role !== 'superadmin') ? null : (
+const CallListFooter: React.FC<{ role: Role; onAdd: () => void }> = ({ role, onAdd }) => {
+  const { t } = useI18n();
+  return (role !== 'admin' && role !== 'superadmin') ? null : (
     <View style={styles.footerContainer}>
       <TouchableOpacity style={styles.addButton} onPress={onAdd} activeOpacity={0.85}>
         <Ionicons name="add" size={22} color="#FFFFFF" />
-        <Text style={styles.addButtonText}>เพิ่มรายการ</Text>
+        <Text style={styles.addButtonText}>{t('callAddItem')}</Text>
       </TouchableOpacity>
     </View>
   );
+};
 
 const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
+  const { t } = useI18n();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(false);
   const [roleLoading, setRoleLoading] = useState(true);
@@ -134,7 +141,7 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
 
   const BASE_URL = getBaseUrl();
 
-  // ---------- ดึง role จาก /auth/me ----------
+  // ---------- เธ”ึง role จาก /auth/me ----------
   const fetchRole = useCallback(async () => {
     try {
       setRoleLoading(true);
@@ -146,7 +153,7 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
       const res = await fetch(`${BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('โหลดสิทธิ์ไม่สำเร็จ');
+      if (!res.ok) throw new Error(t('annLoadPermFailed'));
       const me = await res.json(); // { id, username, full_name, role, created_at }
       setRole((me?.role ?? 'user') as Role);
     } catch (e: any) {
@@ -155,9 +162,9 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
     } finally {
       setRoleLoading(false);
     }
-  }, [BASE_URL]);
+  }, [BASE_URL, t]);
 
-  // ---------- ดึงรายชื่อ ----------
+  // ---------- เธ”ึงรายชื่อ ----------
   const fetchContacts = useCallback(async () => {
     try {
       setLoading(true);
@@ -165,11 +172,11 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
       const json = await res.json();
       setContacts((json?.data ?? []) as Contact[]);
     } catch (e: any) {
-      showAlert('เกิดข้อผิดพลาด', e?.message ?? 'โหลดข้อมูลล้มเหลว');
+      showAlert(t('error'), e?.message ?? t('annLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [BASE_URL]);
+  }, [BASE_URL, t]);
 
   useEffect(() => {
     fetchRole();
@@ -205,11 +212,11 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
         },
         body: JSON.stringify({ title, number }),
       });
-      if (!res.ok) throw new Error('เพิ่มไม่สำเร็จ');
+      if (!res.ok) throw new Error(t('addFailed'));
       await fetchContacts();
       closeAdd();
     } catch (e: any) {
-      showAlert('เกิดข้อผิดพลาด', e?.message ?? 'เพิ่มข้อมูลล้มเหลว');
+      showAlert(t('error'), e?.message ?? t('addDataFailed'));
     } finally {
       setAddSaving(false);
     }
@@ -239,11 +246,11 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
         },
         body: JSON.stringify({ title, number }),
       });
-      if (!res.ok) throw new Error('แก้ไขไม่สำเร็จ');
+      if (!res.ok) throw new Error(t('editFailed'));
       await fetchContacts();
       closeEdit();
     } catch (e: any) {
-      showAlert('เกิดข้อผิดพลาด', e?.message ?? 'แก้ไขข้อมูลล้มเหลว');
+      showAlert(t('error'), e?.message ?? t('editDataFailed'));
     } finally {
       setEditSaving(false);
     }
@@ -252,10 +259,10 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
   // ---------- Delete ----------
   const handleDelete = (item: Contact) => {
     if (role !== 'admin' && role !== 'superadmin') return;
-    showAlert('ลบรายการ', `ลบ "${item.title} (${item.number})" ?`, [
-      { text: 'ยกเลิก', style: 'cancel' },
+    showAlert(t('callDeleteItem'), `${t('delete')} "${item.title} (${item.number})" ?`, [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'ลบ',
+        text: t('delete'),
         style: 'destructive',
         onPress: async () => {
           try {
@@ -264,17 +271,17 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
               method: 'DELETE',
               headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
-            if (!res.ok) throw new Error('ลบไม่สำเร็จ');
+            if (!res.ok) throw new Error(t('deleteFailed'));
             await fetchContacts();
           } catch (e: any) {
-            showAlert('เกิดข้อผิดพลาด', e?.message ?? 'ลบข้อมูลล้มเหลว');
+            showAlert(t('error'), e?.message ?? t('deleteDataFailed'));
           }
         },
       },
     ]);
   };
 
-  // สี (dark/light)
+  // เธชเธต (dark/light)
   const colors = {
     bg: darkMode ? '#121212' : COLORS.bg,
     text: darkMode ? '#FFFFFF' : COLORS.text,
@@ -300,7 +307,7 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
       </View>
 
       <View style={styles.actions}>
-        {/* โทร (ทุกคน) */}
+        {/* เนเธ—เธฃ (เธ—ุกคน) */}
         <TouchableOpacity
           onPress={() => handleCall(item.number)}
           style={[styles.actionBtn, { backgroundColor: colors.green }]}
@@ -308,7 +315,7 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
           <Ionicons name="call" size={18} color="#FFFFFF" />
         </TouchableOpacity>
 
-        {/* เฉพาะแอดมิน */}
+        {/* เน€เธเธเธฒเธฐเนเธญเธ”มิน */}
         {(role === 'admin' || role === 'superadmin') && (
           <>
             <TouchableOpacity
@@ -333,7 +340,7 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={COLORS.green} />
-        <Text style={[styles.loadingText, darkMode ? styles.loadingTextDark : styles.loadingTextLight]}>กำลังตรวจสอบสิทธิ์…</Text>
+        <Text style={[styles.loadingText, darkMode ? styles.loadingTextDark : styles.loadingTextLight]}>{t('callCheckingAuth')}</Text>
       </View>
     );
   }
@@ -386,15 +393,18 @@ const EmergencyContacts: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
   );
 };
 
-const EmptyState: React.FC<{ colors: any }> = ({ colors }) => (
-  <View style={styles.emptyContainer}>
-    <Ionicons name="call-outline" size={64} color={colors.subtext} />
-    <Text style={[styles.emptyText, { color: colors.subtext }]}>ยังไม่มีรายการติดต่อ</Text>
-    <Text style={[styles.emptySubtext, { color: colors.subtext }]}>
-      กดปุ่ม "เพิ่มรายการ" เพื่อเริ่มต้น
-    </Text>
-  </View>
-);
+const EmptyState: React.FC<{ colors: any }> = ({ colors }) => {
+  const { t } = useI18n();
+  return (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="call-outline" size={64} color={colors.subtext} />
+      <Text style={[styles.emptyText, { color: colors.subtext }]}>{t('callNoContacts')}</Text>
+      <Text style={[styles.emptySubtext, { color: colors.subtext }]}>
+        {t('callPressAdd')}
+      </Text>
+    </View>
+  );
+};
 
 export default EmergencyContacts;
 
@@ -414,25 +424,25 @@ const COLORS = {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 8 },
+  loadingText: { marginTop: hp('1%') },
   loadingTextDark: { color: '#fff' },
   loadingTextLight: { color: '#333' },
 
   // Header
-  header: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20 },
-  headerTitle: { fontSize: 22, fontWeight: '800', marginBottom: 6 },
-  headerSubtitle: { fontSize: 13, fontWeight: '500' },
+  header: { alignItems: 'center', paddingVertical: hp('3.5%'), paddingHorizontal: wp('5%') },
+  headerTitle: { fontSize: wp('5.5%'), fontWeight: '800', marginBottom: hp('0.8%') },
+  headerSubtitle: { fontSize: wp('3.2%'), fontWeight: '500' },
 
   // List
-  listContent: { paddingHorizontal: 12, paddingVertical: 10, flexGrow: 1 },
-  separator: { height: 12 },
+  listContent: { paddingHorizontal: wp('3%'), paddingVertical: hp('1.3%'), flexGrow: 1 },
+  separator: { height: hp('1.5%') },
 
   // Card
   card: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
+    borderRadius: wp('4%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.7%'),
+    marginBottom: hp('1.5%'),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
@@ -442,27 +452,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    minHeight: 70,
+    minHeight: hp('9%'),
   },
-  contactInfo: { flex: 1, marginRight: 15 },
-  titleText: { fontSize: 16, fontWeight: '700', marginBottom: 8, lineHeight: 22 },
+  contactInfo: { flex: 1, marginRight: wp('4%') },
+  titleText: { fontSize: wp('4%'), fontWeight: '700', marginBottom: hp('1%'), lineHeight: wp('5.5%') },
   numberPill: {
-    height: 28,
-    paddingHorizontal: 12,
+    height: hp('3.5%'),
+    paddingHorizontal: wp('3%'),
     borderRadius: 999,
     justifyContent: 'center',
     alignSelf: 'flex-start',
     backgroundColor: COLORS.greenSoft,
   },
-  numberPillText: { fontWeight: '700', fontSize: 18, letterSpacing: 0.3, color: COLORS.number },
+  numberPillText: { fontWeight: '700', fontSize: wp('4.5%'), letterSpacing: 0.3, color: COLORS.number },
 
   // Right actions
-  actions: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 2 },
+  actions: { flexDirection: 'row', alignItems: 'flex-start', marginTop: hp('0.3%') },
   actionBtn: {
-    marginRight: 8,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    marginRight: wp('2%'),
+    width: wp('9.5%'),
+    height: wp('9.5%'),
+    borderRadius: wp('4.75%'),
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -473,27 +483,27 @@ const styles = StyleSheet.create({
   },
 
   // Footer
-  footerContainer: { paddingTop: 20, paddingBottom: 20 },
+  footerContainer: { paddingTop: hp('2.5%'), paddingBottom: hp('2.5%') },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.green,
-    marginHorizontal: 8,
-    paddingVertical: 16,
-    borderRadius: 26,
+    marginHorizontal: wp('2%'),
+    paddingVertical: hp('2%'),
+    borderRadius: wp('6.5%'),
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 7,
   },
-  addButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', marginLeft: 8 },
+  addButtonText: { color: '#FFFFFF', fontSize: wp('4%'), fontWeight: '800', marginLeft: wp('2%') },
 
   // Empty
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyText: { fontSize: 16, fontWeight: '800', marginTop: 18, marginBottom: 6 },
-  emptySubtext: { fontSize: 13, textAlign: 'center' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: hp('7.5%') },
+  emptyText: { fontSize: wp('4%'), fontWeight: '800', marginTop: hp('2.3%'), marginBottom: hp('0.8%') },
+  emptySubtext: { fontSize: wp('3.2%'), textAlign: 'center' },
 
   // ===== Modal =====
   modalBackdrop: {
@@ -501,12 +511,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: wp('5%'),
   },
   modalCenter: { width: '100%' },
   modalCard: {
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: wp('4%'),
+    padding: wp('4%'),
     borderWidth: 1,
     width: '100%',
     maxWidth: 420,
@@ -516,28 +526,30 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12 },
-  modalLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
+  modalTitle: { fontSize: wp('4.5%'), fontWeight: '800', marginBottom: hp('1.5%') },
+  modalLabel: { fontSize: wp('3%'), fontWeight: '600', marginBottom: hp('0.8%') },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
-    fontSize: 14,
+    borderRadius: wp('3%'),
+    paddingHorizontal: wp('3%'),
+    paddingVertical: Platform.OS === 'ios' ? hp('1.5%') : hp('1.3%'),
+    fontSize: wp('3.5%'),
   },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: hp('2%') },
   modalBtn: {
-    minWidth: 96,
-    height: 42,
-    borderRadius: 10,
+    minWidth: wp('24%'),
+    height: hp('5.3%'),
+    borderRadius: wp('2.5%'),
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    marginLeft: 8,
+    paddingHorizontal: wp('3%'),
+    marginLeft: wp('2%'),
   },
   modalCancel: { backgroundColor: '#E9ECEF' },
   modalCancelText: { color: '#333', fontWeight: '700' },
   modalSave: { backgroundColor: COLORS.green },
   modalSaveText: { color: '#fff', fontWeight: '800' },
-  modalLabelNumber: { marginTop: 10 },
+  modalLabelNumber: { marginTop: hp('1.3%') },
 });
+
+

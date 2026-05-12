@@ -1,13 +1,15 @@
 import React, { useContext, useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Platform, TouchableOpacity, Modal, Pressable, Image } from 'react-native';
-import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Modal, Pressable, Image } from 'react-native';
+import { launchImageLibrary, type Asset } from 'react-native-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from '../components/GlobalAlert';
 import { NavigationRouteContext } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import { BASE_HOST, BASE_PORT } from './config';
+import { BASE_HOST } from './config';
+import { useI18n } from '../i18n';
+import RepairCameraModal from '../components/RepairCameraModal';
 
-const getBaseUrl = () => `http://${Platform.OS === 'android' ? BASE_HOST : BASE_HOST}:${BASE_PORT}`;
+const getBaseUrl = () => BASE_HOST;
 
 type Payment = {
   id: number;
@@ -43,7 +45,7 @@ type Props = {
    houseNumber?: string | null;
    onGoQr?: () => void;
    darkMode?: boolean;
-  isAdmin?: boolean; // เพิ่มตัวบอกสิทธิ์
+  isAdmin?: boolean; // น€เธโฌเน€เธยเนยเธเเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธ”เน€เธย
 };
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -57,19 +59,19 @@ const addMonths = (date: Date, months: number) => {
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const fmtDate = (d: Date) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
 const fmtDateTime = (d: Date) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-const paidMethodLabel: Record<NonNullable<PaymentInstallment['paid_method']>, string> = {
-  cash: 'เงินสด',
+const paidMethodLabelKeys: Record<NonNullable<PaymentInstallment['paid_method']>, string> = {
+  cash: 'phCash',
   promptpay: 'PromptPay',
-  bank_transfer: 'โอนธนาคาร',
+  bank_transfer: 'phBankTransfer',
 };
-// parse 'YYYY-MM-DD HH:mm:ss' หรือ 'YYYY-MM-DDTHH:mm:ss' -> Date (โซนท้องถิ่น ป้องกันพลาด timezone)
+// parse 'YYYY-MM-DD HH:mm:ss' เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย 'YYYY-MM-DDTHH:mm:ss' -> Date (เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ”เน€เธยเน€เธย เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌย timezone)
 const parseMySqlDateTime = (s: string) => {
   if (!s) return new Date();
-  // ถ้ามี T หรือ Z หรือ + แสดงว่าเป็น ISO format ให้ใช้ new Date() parse ตามปกติ (จะได้ตาม timezone เครื่อง)
+  // เน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธ’เน€เธเธเน€เธเธ• T เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย Z เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย + เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนยเธเน€เธยเน€เธยเน€เธย ISO format เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธย new Date() parse เน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€ (เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธย timezone เน€เธโฌเน€เธยเนยเธเน€เธยเน€เธเธเน€เธเธ—เน€เธยเน€เธเธเน€เธย)
   if (s.includes('T') || s.includes('Z') || s.includes('+')) {
     return new Date(s);
   }
-  // กรณี date string แบบบ้านๆ (MySQL เก่า) ไม่มี timezone -> parse เป็น local date components
+  // เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธโ€ข date string เน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธย (MySQL เน€เธโฌเน€เธยเนยเธเน€เธยเน€เธยเน€เธเธ’) เน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ• timezone -> parse เน€เธโฌเน€เธยเนยเธเน€เธยเน€เธยเน€เธย local date components
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
   if (!m) return new Date(s);
   return new Date(
@@ -93,6 +95,7 @@ const QR_INTENT_KEY = 'qr_intent_id';
 const QR_INSTALLMENT_KEY = 'qr_installment_id';
 
 const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmin, onGoQr }) => {
+  const { t } = useI18n();
   const routeContext = useContext(NavigationRouteContext);
   const routeParams = (routeContext?.params ?? {}) as { houseNumber?: string; house?: string };
   const paramHouse =
@@ -100,7 +103,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     (routeParams.house as string | undefined) ||
     undefined;
   const fromHouseNumber = houseNumber || undefined;
-  const house = propHouse ?? fromHouseNumber ?? paramHouse; // บ้านที่ต้องการดูจริง
+  const house = propHouse ?? fromHouseNumber ?? paramHouse; // เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธเธเน€เธยเน€เธเธเน€เธเธ”เน€เธย
 
   const [items, setItems] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -116,11 +119,12 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
   const [proofImage, setProofImage] = useState<{ uri: string; type: string; fileName: string } | null>(null);
   const [sheetRow, setSheetRow] = useState<PaymentInstallment | null>(null);
   const [sheetBusy, setSheetBusy] = useState(false);
+  const [cameraVisible, setCameraVisible] = useState(false);
 
   // ImageViewer state
   const [viewImageUri, setViewImageUri] = useState<string | null>(null);
 
-  // ดึงบทบาทผู้ใช้จาก /auth/me
+  // เน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธโ€“เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธย /auth/me
   const fetchRole = useCallback(async () => {
     try {
       const base = getBaseUrl();
@@ -165,7 +169,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      // อัปเดตสถานะ overdue อัตโนมัติก่อนดึง (ไม่บล็อกถ้าพัง)
+      // เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ overdue เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌยเน€เธเธ–เน€เธย (เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธ’เน€เธยเน€เธเธ‘เน€เธย)
       if (refreshStatus) {
         try {
           await fetch(`${base}/payment-installments/refresh-status`, { method: 'POST', headers });
@@ -189,7 +193,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
 
       setItems(filtered);
 
-      // ดึงงวดของแต่ละ payment จากตาราง payment_installments (ทำแบบขนาน)
+      // เน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธโ€“เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌเธเน€เธยเน€เธเธ…เน€เธเธ payment เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌเธเน€เธเธ’เน€เธเธเน€เธเธ’เน€เธย payment_installments (เน€เธโฌเน€เธยเนโฌโ€เน€เธเธ“เน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธย)
       const instHeaders: Record<string, string> = {
         Accept: 'application/json',
         'Content-Type': 'application/json',
@@ -240,7 +244,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     }
   }, [loadData, fetchRole]);
 
-  // ส่งยอดไปหน้า QR (เก็บใน AsyncStorage แล้วเรียกหน้า QR)
+  // เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ QR (เน€เธโฌเน€เธยเนยเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธย AsyncStorage เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนยเธเน€เธเธเน€เธเธ•เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ QR)
   const createPaymentIntent = useCallback(
     async (row: PaymentInstallment, houseNum?: string | number) => {
       try {
@@ -256,7 +260,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
           body: JSON.stringify({
             installment_id: row.id,
             payment_id: row.payment_id,
-            house_number: houseNum ?? house, // ใช้ค่าที่ส่งมา หรือ fallback เป็นบ้านที่กำลังดู
+            house_number: houseNum ?? house, // เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌโ€เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธเธ’ เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย fallback เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธย
             amount: row.amount,
             method: 'promptpay',
           }),
@@ -270,7 +274,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     [house]
   );
 
-  // ไปหน้า QR (บันทึก amount, installment_id และ intentId)
+  // เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ QR (เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ–เน€เธย amount, installment_id เน€เธยเน€เธเธ…เน€เธเธ intentId)
   const goQr = useCallback(
     async (row: PaymentInstallment, houseNum?: string | number) => {
       try {
@@ -284,7 +288,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     [createPaymentIntent, onGoQr]
  );
 
-  // เรียก backend เพื่ออัปเดตสถานะ (เฉพาะแอดมิน)
+  // เน€เธโฌเน€เธยเนยเธเน€เธเธเน€เธเธ•เน€เธเธเน€เธย backend เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ (เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธเธเน€เธเธ”เน€เธย)
   const updateInstallmentStatus = useCallback(async (
     id: number,
     status: 'paid' | 'pending' | 'overdue' | 'waiting_approval',
@@ -303,11 +307,11 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       body: JSON.stringify({ status, paid_method, paid_note }),
     });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok || !j?.ok) throw new Error(j?.message || 'อัปเดตสถานะไม่สำเร็จ');
+    if (!res.ok || !j?.ok) throw new Error(j?.message || t('phUpdateFailed'));
     await loadData({ showSpinner: false, refreshStatus: true });
-  }, [loadData]);
+  }, [loadData, t]);
 
-  // เปิดแผ่นสถานะ
+  // เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ
   const openStatusSheet = useCallback((row: PaymentInstallment) => {
     setSheetRow(row);
     setSheetStep('status');
@@ -316,6 +320,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
 
   const closeSheet = useCallback(() => {
     if (sheetBusy) return;
+    setCameraVisible(false);
     setSheetOpen(false);
     setSheetRow(null);
     setProofImage(null);
@@ -323,8 +328,8 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     setPendingStatus(null);
   }, [sheetBusy]);
 
-  // เลือกสถานะ
-  // แจ้งเตือนยอดชำระ
+  // เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ
+  // เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธยเน€เธเธ“เน€เธเธเน€เธเธ
   const notifyPayment = useCallback(async (row: PaymentInstallment, status: string) => {
     try {
       const base = getBaseUrl();
@@ -337,13 +342,13 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
         },
         body: JSON.stringify({ installment_id: row.id, status }),
       });
-      showAlert('สำเร็จ', 'ส่งการแจ้งเตือนเรียบร้อยแล้ว');
+      showAlert(t('success'), t('phNotifSent'));
     } catch {}
-  }, []);
+  }, [t]);
 
   const [pendingStatus, setPendingStatus] = useState<'pending' | 'overdue' | 'waiting_approval' | null>(null);
 
-  // เลือกสถานะ
+  // เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ
   const chooseStatus = useCallback(async (row: PaymentInstallment, status: 'paid' | 'pending' | 'overdue' | 'waiting_approval') => {
     if (status === 'paid') {
       setSheetStep('method');
@@ -353,21 +358,21 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     // New Logic: If editing 'paid' item
     if (sheetRow?.status === 'paid' && !isSuperAdmin) {
       showAlert(
-        'ขออนุมัติแก้ไข',
-        'การแก้ไขสถานะ "ชำระแล้ว" ต้องได้รับการอนุมัติ\nต้องการส่งคำขอหรือไม่?',
+        t('phApprovalTitle'),
+        t('phApprovalMsg'),
         [
-          { text: 'ยกเลิก', style: 'cancel' },
+          { text: t('cancel'), style: 'cancel' },
           { 
-            text: 'ส่งคำขอ', 
+            text: t('phSendRequest'), 
             onPress: async () => {
               try {
                 setSheetBusy(true);
                 // Directly call update to waiting_approval
                 await updateInstallmentStatus(row.id, 'waiting_approval');
-                showAlert('สำเร็จ', 'ส่งคำขออนุมัติแล้ว กรุณารอ Super Admin ตรวจสอบ');
+                showAlert(t('success'), t('phRequestSent'));
                 closeSheet();
               } catch (e: any) {
-                showAlert('ผิดพลาด', e?.message || 'ส่งคำขอไม่สำเร็จ');
+                showAlert(t('error'), e?.message || t('phRequestFailed'));
               } finally {
                 setSheetBusy(false);
               }
@@ -378,12 +383,12 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       return;
     }
 
-    // เปลี่ยนไปใช้หน้า Confirm แทน Alert
+    // เน€เธโฌเน€เธยเนยเธเน€เธยเน€เธเธ…เน€เธเธ•เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ Confirm เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธย Alert
     setPendingStatus(status);
     setSheetStep('confirm_status');
-  }, [sheetRow, isSuperAdmin, closeSheet, updateInstallmentStatus]);
+  }, [sheetRow, isSuperAdmin, closeSheet, updateInstallmentStatus, t]);
 
-  // ดำเนินการเปลี่ยนสถานะ (จากหน้า Confirm)
+  // เน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ (เน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ Confirm)
   const confirmChangeStatus = async (notify: boolean) => {
     if (!sheetRow || !pendingStatus) return;
     try {
@@ -394,7 +399,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       }
       closeSheet();
     } catch (e: any) {
-      showAlert('ผิดพลาด', e?.message || 'อัปเดตไม่สำเร็จ');
+      showAlert(t('error'), e?.message || t('phUpdateFailed'));
     } finally {
       setSheetBusy(false);
     }
@@ -405,7 +410,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     try {
       setSheetBusy(true);
       if (method === 'cash' || method === 'bank_transfer') {
-        // ถ้าเป็นเงินสด หรือ โอนธนาคาร ให้ไปหน้า Proof
+        // เน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌย เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธ’เน€เธเธ เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ Proof
         setSheetBusy(false);
         setPendingMethod(method);
         setSheetStep('proof');
@@ -414,13 +419,13 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       await updateInstallmentStatus(row.id, 'paid', method);
       closeSheet();
     } catch (e: any) {
-      showAlert('ผิดพลาด', e?.message || 'อัปเดตไม่สำเร็จ');
+      showAlert(t('error'), e?.message || t('phUpdateFailed'));
     } finally {
-      if (sheetStep !== 'proof') { // ถ้าไปหน้า proof ไม่ต้องปิด busy
+      if (sheetStep !== 'proof') { // เน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ’ proof เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌย busy
          setSheetBusy(false);
       }
     }
-  }, [updateInstallmentStatus, closeSheet, sheetStep]);
+  }, [updateInstallmentStatus, closeSheet, sheetStep, t]);
 
   const handleChooseImage = async () => {
     try {
@@ -435,16 +440,19 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
   };
 
   const handleTakePhoto = async () => {
-    try {
-      const result = await launchCamera({ mediaType: 'photo', quality: 0.8 });
-      if (result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setProofImage({ uri: asset.uri!, type: asset.type!, fileName: asset.fileName || 'capture.jpg' });
-      }
-    } catch (e) {
-      console.warn(e);
-    }
+    setCameraVisible(true);
   };
+
+  const onCameraCapture = useCallback((asset: Asset) => {
+    if (asset?.uri) {
+      setProofImage({
+        uri: asset.uri,
+        type: asset.type || 'image/jpeg',
+        fileName: asset.fileName || `capture_${Date.now()}.jpg`,
+      });
+    }
+    setCameraVisible(false);
+  }, []);
 
   const confirmPaymentWithProof = async () => {
     if (!sheetRow) return;
@@ -475,12 +483,12 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       });
 
       const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j?.ok) throw new Error(j?.message || 'อัปเดตสถานะไม่สำเร็จ');
+      if (!res.ok || !j?.ok) throw new Error(j?.message || t('phUpdateFailed'));
 
       await loadData({ showSpinner: false, refreshStatus: true });
       closeSheet();
     } catch (e: any) {
-      showAlert('ผิดพลาด', e?.message || 'อัปเดตไม่สำเร็จ');
+      showAlert(t('error'), e?.message || t('phUpdateFailed'));
     } finally {
       setSheetBusy(false);
     }
@@ -503,19 +511,19 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     if (overdueIdx.length > 0) {
       return (
         <>
-          <Text style={styles.listHeader}>รายการค้างชำระ</Text>
+          <Text style={styles.listHeader}>{t('phOverdueList')}</Text>
           {overdueIdx.map((i) => (
             <View key={i} style={styles.userInstRow}>
               <View style={styles.userCol}>
-                <Text style={styles.userLabel}>วันที่</Text>
+                <Text style={styles.userLabel}>{t('phDateLabel')}</Text>
                 <Text style={styles.userValue}>{fmtDate(dates[i])}</Text>
               </View>
               <View style={styles.userCol}>
-                <Text style={styles.userLabel}>จำนวนเงิน</Text>
-                <Text style={styles.userValue}>{fmt(perInstallment || 0)} บาท</Text>
+                <Text style={styles.userLabel}>{t('phAmountLabel')}</Text>
+                <Text style={styles.userValue}>{fmt(perInstallment || 0)} {t('phBaht')}</Text>
               </View>
               <View style={styles.userStatusCol}>
-                <Text style={[styles.userStatus, styles.userStatusOverdue]}>ค้างชำระ</Text>
+                <Text style={[styles.userStatus, styles.userStatusOverdue]}>{t('payStatusOverdue')}</Text>
               </View>
             </View>
           ))}
@@ -525,18 +533,18 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
     const last = dates[dates.length - 1];
     return (
       <>
-        <Text style={styles.listHeader}>กำหนดชำระ (งวดล่าสุด)</Text>
+        <Text style={styles.listHeader}>{t('phLatestInstallment')}</Text>
         <View style={styles.userInstRow}>
           <View style={styles.userCol}>
-            <Text style={styles.userLabel}>วันที่</Text>
+            <Text style={styles.userLabel}>{t('phDateLabel')}</Text>
             <Text style={styles.userValue}>{fmtDate(last)}</Text>
           </View>
           <View style={styles.userCol}>
-            <Text style={styles.userLabel}>จำนวนเงิน</Text>
-            <Text style={styles.userValue}>{fmt(perInstallment || 0)} บาท</Text>
+            <Text style={styles.userLabel}>{t('phAmountLabel')}</Text>
+            <Text style={styles.userValue}>{fmt(perInstallment || 0)} {t('phBaht')}</Text>
           </View>
           <View style={styles.userStatusCol}>
-            <Text style={[styles.userStatus, styles.userStatusPending]}>กำลังดำเนินการ</Text>
+            <Text style={[styles.userStatus, styles.userStatusPending]}>{t('payStatusProcessing')}</Text>
           </View>
         </View>
       </>
@@ -545,14 +553,16 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
 
   const renderInstallmentSection = (item: Payment) => {
     const list = instMap[item.id] || [];
-    if (instLoading) return <Text style={styles.scheduleHeader}>กำลังโหลดงวด…</Text>;
+    if (instLoading) return <Text style={styles.scheduleHeader}>{t('phLoadingInstallments')}</Text>;
     if (list.length > 0) {
       const start = parseMySqlDateTime(item.created_at);
       if (isAdminView) {
+        const perInstallmentByPayment = (Number(item.amount_per_month) || 0) * (Number(item.months) || 0);
+        const perInstallmentDisplay = perInstallmentByPayment > 0 ? perInstallmentByPayment : Number(list[0].amount || 0);
         return (
           <View style={styles.mt10}>
             <Text style={styles.scheduleHeader}>
-              งวดละ {fmt(list[0].amount)} บาท · {list.length} งวด (เริ่ม {fmtDate(start)})
+              {t('phInstallmentPer')} {fmt(perInstallmentDisplay)} {t('phBaht')} ทั้งหมด {list.length} {t('phInstallments')} ({t('phStartFrom')} {fmtDate(start)})
             </Text>
             <View style={styles.scheduleWrap}>
               {list.map((row) => {
@@ -574,7 +584,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                     onPress={() => openStatusSheet(row)}
                     style={[styles.scheduleItem, chipStyle]}
                   >
-                    <Text style={styles.scheduleRound}>งวด {row.installment_no}</Text>
+                    <Text style={styles.scheduleRound}>{t('payInstallment')} {row.installment_no}</Text>
                     <Text style={styles.scheduleDate}>{fmtDate(parseMySqlDateTime(row.due_date))}</Text>
                   </TouchableOpacity>
                 );
@@ -588,20 +598,20 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       if (overdueList.length > 0) {
         return (
           <View style={styles.mt10}>
-            <Text style={styles.listHeader}>รายการค้างชำระ</Text>
+            <Text style={styles.listHeader}>{t('phOverdueList')}</Text>
             {overdueList.map((row) => (
               <TouchableOpacity key={row.id} style={styles.userInstRow} activeOpacity={0.8}
                 onPress={() => goQr(row, item.house_number)}>
                 <View style={styles.userCol}>
-                  <Text style={styles.userLabel}>วันที่</Text>
+                  <Text style={styles.userLabel}>{t('phDateLabel')}</Text>
                   <Text style={styles.userValue}>{fmtDate(parseMySqlDateTime(row.due_date))}</Text>
                 </View>
                 <View style={styles.userCol}>
-                  <Text style={styles.userLabel}>จำนวนเงิน</Text>
-                  <Text style={styles.userValue}>{fmt(row.amount)} บาท</Text>
+                  <Text style={styles.userLabel}>{t('phAmountLabel')}</Text>
+                  <Text style={styles.userValue}>{fmt(row.amount)} {t('phBaht')}</Text>
                 </View>
                 <View style={styles.userStatusCol}>
-                  <Text style={[styles.userStatus, styles.userStatusOverdue]}>ค้างชำระ</Text>
+                  <Text style={[styles.userStatus, styles.userStatusOverdue]}>{t('payStatusOverdue')}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -613,8 +623,8 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       if (!latest) return null;
       const status = getInstallmentStatus(latest);
       const statusLabel =
-        status === 'paid' ? 'ชำระเรียบร้อย' :
-        status === 'overdue' ? 'ค้างชำระ' : 'กำลังดำเนินการ';
+        status === 'paid' ? t('phPaidComplete') :
+        status === 'overdue' ? t('payStatusOverdue') : t('payStatusProcessing');
       const statusStyle =
         status === 'paid'
           ? styles.userStatusPaid
@@ -623,22 +633,22 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
           : styles.userStatusPending;
       return (
         <View style={styles.mt10}>
-          <Text style={styles.listHeader}>กำหนดชำระ (งวดล่าสุด)</Text>
+          <Text style={styles.listHeader}>{t('phLatestInstallment')}</Text>
           <TouchableOpacity style={styles.userInstRow} activeOpacity={0.8}
             onPress={() => goQr(latest, item.house_number)}>
             <View style={styles.userCol}>
-              <Text style={styles.userLabel}>วันที่</Text>
+              <Text style={styles.userLabel}>{t('phDateLabel')}</Text>
               <Text style={styles.userValue}>{fmtDate(parseMySqlDateTime(latest.due_date))}</Text>
             </View>
             <View style={styles.userCol}>
-              <Text style={styles.userLabel}>จำนวนเงิน</Text>
-              <Text style={styles.userValue}>{fmt(latest.amount)} บาท</Text>
+              <Text style={styles.userLabel}>{t('phAmountLabel')}</Text>
+              <Text style={styles.userValue}>{fmt(latest.amount)} {t('phBaht')}</Text>
             </View>
             <View style={styles.userStatusCol}>
               <Text style={[styles.userStatus, statusStyle]}>{statusLabel}</Text>
               {status === 'paid' && (
                 <Text style={styles.userStatusMeta}>
-                  {(latest.paid_method && paidMethodLabel[latest.paid_method]) || '—'} • {latest.paid_at ? fmtDateTime(parseMySqlDateTime(latest.paid_at)) : '—'}
+                  {(latest.paid_method && t(paidMethodLabelKeys[latest.paid_method])) || '-'} - {latest.paid_at ? fmtDateTime(parseMySqlDateTime(latest.paid_at)) : '-'}
                 </Text>
               )}
             </View>
@@ -647,7 +657,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       );
     }
 
-    // fallback คำนวณเอง (กรณี B ยังไม่มี)
+    // fallback เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเนยเธเน€เธเธเน€เธย (เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธโ€ข B เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธเน€เธเธ•)
     const m = Number(item.months) || 0;
     const start = parseMySqlDateTime(item.created_at);
     const count = m > 0 ? Math.floor(12 / m) : 0;
@@ -658,12 +668,12 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
       return (
         <View style={styles.mt10}>
           <Text style={styles.scheduleHeader}>
-            งวดละ {fmt(perInstallment || 0)} บาท · {count} งวด (เริ่ม {fmtDate(start)})
+            {t('phInstallmentPer')} {fmt(perInstallment || 0)} {t('phBaht')} x {count} {t('phInstallments')} ({t('phStartFrom')} {fmtDate(start)})
           </Text>
           <View style={styles.scheduleWrap}>
             {schedule.map((label, idx) => (
               <View key={idx} style={styles.scheduleItem}>
-                <Text style={styles.scheduleRound}>งวด {idx + 1}</Text>
+                <Text style={styles.scheduleRound}>{t('payInstallment')} {idx + 1}</Text>
                 <Text style={styles.scheduleDate}>{label}</Text>
               </View>
             ))}
@@ -689,36 +699,58 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
          renderItem={({ item }) => (
            <View style={styles.card}>
              <View style={styles.cardHeader}>
-               <Ionicons name="receipt-outline" size={18} color="#111" />
-               <Text style={styles.title}>บ้านเลขที่ {item.house_number}</Text>
-               <Text style={styles.date}>  🕐{fmtDateTime(parseMySqlDateTime(item.created_at))}</Text>
+               <View style={styles.headerLeft}>
+                 <View style={styles.houseIconBadge}>
+                   <Ionicons name="receipt-outline" size={18} color="#334155" />
+                 </View>
+                 <View style={styles.headerMeta}>
+                   <Text style={styles.title}>{t('phHouseNumber')} {item.house_number}</Text>
+                   <View style={styles.datePill}>
+                     <Ionicons name="time-outline" size={12} color="#64748B" />
+                     <Text style={styles.date}>{fmtDateTime(parseMySqlDateTime(item.created_at))}</Text>
+                   </View>
+                 </View>
+               </View>
              </View>
-             <View style={styles.row}>
-               <Text style={styles.label}>พื้นที่ใช้สอย:</Text>
-               <Text style={styles.val}>{fmt(item.area_sq_m || 0)} ตร.ม.</Text>
+
+             <View style={styles.metricsWrap}>
+               <View style={styles.row}>
+                 <Text style={styles.label}>{t('phArea')}:</Text>
+                 <Text style={styles.val}>{fmt(item.area_sq_m || 0)} {t('phSqM')}</Text>
+               </View>
+               <View style={styles.row}>
+                 <Text style={styles.label}>{t('phRatePerSqm')}:</Text>
+                 <Text style={styles.val}>{fmt(item.rate_per_sqm)} {t('phBaht')}</Text>
+               </View>
+               <View style={styles.row}>
+                 <Text style={styles.label}>{t('phAmountPerMonth')}:</Text>
+                 <Text style={styles.val}>{fmt(item.amount_per_month)} {t('phBaht')}</Text>
+               </View>
+               <View style={styles.row}>
+                 <Text style={styles.label}>{t('phMonths')}:</Text>
+                 <Text style={styles.val}>{item.months} {t('phMonthUnit')}</Text>
+               </View>
              </View>
-             <View style={styles.row}>
-               <Text style={styles.label}>อัตราต่อ ตร.ม.:</Text>
-               <Text style={styles.val}>{fmt(item.rate_per_sqm)} บาท</Text>
+
+             <View style={styles.totalRowBox}>
+               <Text style={styles.totalLabel}>{t('phTotal')}</Text>
+               <Text style={styles.totalValue}>{fmt(item.total_amount)} {t('phBaht')}</Text>
              </View>
-             <View style={styles.row}>
-               <Text style={styles.label}>จำนวนเงินต่อเดือน:</Text>
-               <Text style={styles.val}>{fmt(item.amount_per_month)} บาท</Text>
-             </View>
-             <View style={styles.row}>
-               <Text style={styles.label}>จำนวนเดือน:</Text>
-               <Text style={styles.val}>{item.months} เดือน</Text>
-             </View>
-             <View style={[styles.row, styles.mt6]}>
-               <Text style={[styles.label, styles.bold800]}>รวม:</Text>
-               <Text style={[styles.val, styles.cardTitle]}>{fmt(item.total_amount)} บาท</Text>
-             </View>
+
              {renderInstallmentSection(item)}
-             {!!item.note && <Text style={styles.note}>หมายเหตุ: {item.note}</Text>}
+
+             {!!item.note && (
+               <View style={styles.noteBox}>
+                 <Text style={styles.note}>
+                   <Text style={styles.noteLabel}>{t('phNote')}: </Text>
+                   {item.note}
+                 </Text>
+               </View>
+             )}
            </View>
          )}
        />
-       {/* Bottom Sheet: เปลี่ยนสถานะ / วิธีชำระ */}
+       {/* Bottom Sheet: เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ / เน€เธเธเน€เธเธ”เน€เธยเน€เธเธ•เน€เธยเน€เธเธ“เน€เธเธเน€เธเธ */}
       <Modal visible={sheetOpen} transparent animationType="fade" onRequestClose={closeSheet}>
         <Pressable style={styles.sheetBackdrop} onPress={closeSheet}>
           <View />
@@ -729,18 +761,18 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
               <View style={styles.sheetHeader}>
                 <View style={styles.sheetHandle} />
                 <Text style={styles.sheetTitle}>
-                  {sheetStep === 'status' ? 'เปลี่ยนสถานะงวด' : 'เลือกวิธีชำระ'}
+                  {sheetStep === 'status' ? t('phChangeStatus') : t('phChooseMethod')}
                 </Text>
                 <Text style={styles.sheetSubtitle}>
-                  งวด {sheetRow.installment_no} • {fmtDate(parseMySqlDateTime(sheetRow.due_date))}
+                  {t('payInstallment')} {sheetRow.installment_no} - {fmtDate(parseMySqlDateTime(sheetRow.due_date))}
                 </Text>
                 {sheetRow.paid_at && (
                   <View style={styles.sheetPaidInfo}>
                     <Text style={styles.sheetMeta}>
-                      ชำระเมื่อ {fmtDateTime(parseMySqlDateTime(sheetRow.paid_at))}{' '}
-                      {sheetRow.paid_method ? `• ${paidMethodLabel[sheetRow.paid_method]}` : ''}
+                      {t('phPaidAt')} {fmtDateTime(parseMySqlDateTime(sheetRow.paid_at))}{' '}
+                      {sheetRow.paid_method ? '- ' + t(paidMethodLabelKeys[sheetRow.paid_method]) : ''}
                     </Text>
-                     {sheetRow.paid_by && <Text style={styles.sheetMeta}>ยืนยันโดย: {sheetRow.paid_by}</Text>}
+                     {sheetRow.paid_by && <Text style={styles.sheetMeta}>{t('phConfirmedBy')}: {sheetRow.paid_by}</Text>}
                      {sheetRow.proof_image && (
                         <Pressable 
                           style={styles.sheetProofPress} 
@@ -751,7 +783,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                             style={styles.sheetProofImage}
                             resizeMode="cover"
                           />
-                          <Text style={styles.sheetProofHint}>แตะเพื่อดูรูป</Text>
+                          <Text style={styles.sheetProofHint}>{t('phTapToView')}</Text>
                         </Pressable>
                      )}
                   </View>
@@ -759,6 +791,17 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
               </View>
 
               {sheetStep === 'status' ? (
+                sheetRow.status === 'waiting_approval' ? (
+                  <View style={[styles.sheetOptions, styles.waitingApprovalContainer]}>
+                    <Ionicons name="time-outline" size={48} color="#6B7280" style={styles.waitingApprovalIcon} />
+                    <Text style={styles.waitingApprovalTitle}>
+                      อยู่ระหว่างรออนุมัติการแก้ไขสถานะ
+                    </Text>
+                    <Text style={styles.waitingApprovalSubtitle}>
+                      ไม่สามารถเปลี่ยนสถานะได้ในขณะนี้
+                    </Text>
+                  </View>
+                ) : (
                 <View style={styles.sheetOptions}>
                   {sheetRow.status !== 'paid' && (
                     <Pressable
@@ -767,7 +810,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                       style={[styles.optBtn, styles.optPrimary, sheetBusy && styles.optDisabled]}
                     >
                       <Ionicons name="checkmark-done-outline" size={18} color="#0F5132" />
-                      <Text style={[styles.optText, styles.colorPaid]}>ชำระแล้ว</Text>
+                      <Text style={[styles.optText, styles.colorPaid]}>{t('payStatusPaid')}</Text>
                     </Pressable>
                   )}
                   <Pressable
@@ -776,7 +819,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                     style={[styles.optBtn, styles.optNeutral, sheetBusy && styles.optDisabled]}
                   >
                     <Ionicons name="time-outline" size={18} color="#5A4500" />
-                    <Text style={[styles.optText, styles.colorPending]}>รอชำระ</Text>
+                    <Text style={[styles.optText, styles.colorPending]}>{t('payStatusPending')}</Text>
                   </Pressable>
                   <Pressable
                     disabled={sheetBusy}
@@ -784,9 +827,10 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                     style={[styles.optBtn, styles.optDanger, sheetBusy && styles.optDisabled]}
                   >
                     <Ionicons name="warning-outline" size={18} color="#7F1D1D" />
-                    <Text style={[styles.optText, styles.colorOverdue]}>ค้างชำระ</Text>
+                    <Text style={[styles.optText, styles.colorOverdue]}>{t('payStatusOverdue')}</Text>
                   </Pressable>
                 </View>
+                )
               ) : sheetStep === 'confirm_status' ? (
                 <View style={styles.sheetOptions}>
                    <View style={styles.confirmSection}>
@@ -798,10 +842,10 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                         />
                       </View>
                       <Text style={styles.confirmTitle}>
-                        ยืนยันการเปลี่ยนสถานะ
+                        {t('phConfirmChange')}
                       </Text>
                       <Text style={styles.confirmSubtitle}>
-                         ต้องการเปลี่ยนสถานะเป็น "{pendingStatus === 'pending' ? 'รอชำระ' : 'ค้างชำระ'}" ใช่หรือไม่?
+                         {t('phConfirmChangeMsg', { status: pendingStatus === 'pending' ? t('payStatusPending') : t('payStatusOverdue') })}
                       </Text>
                    </View>
 
@@ -811,7 +855,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                      style={[styles.optBtn, styles.optNotify, sheetBusy && styles.optDisabled]}
                    >
                      <Ionicons name="notifications-outline" size={20} color="#0369A1" />
-                     <Text style={[styles.optText, styles.colorNotify]}>เปลี่ยนสถานะและแจ้งเตือน</Text>
+                     <Text style={[styles.optText, styles.colorNotify]}>{t('phChangeAndNotify')}</Text>
                    </Pressable>
 
                    <Pressable
@@ -820,7 +864,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                      style={[styles.optBtn, styles.optNeutral, styles.optCenter, sheetBusy && styles.optDisabled]}
                    >
                      <Ionicons name="create-outline" size={20} color="#374151" />
-                     <Text style={[styles.optText, styles.colorNeutral]}>เปลี่ยนสถานะเท่านั้น</Text>
+                     <Text style={[styles.optText, styles.colorNeutral]}>{t('phChangeOnly')}</Text>
                    </Pressable>
                 </View>
               ) : sheetStep === 'confirm_notify' ? (
@@ -834,10 +878,10 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                         />
                       </View>
                       <Text style={styles.confirmTitle}>
-                        ยืนยันการแจ้งเตือน
+                        {t('phConfirmNotify')}
                       </Text>
                       <Text style={styles.confirmSubtitle}>
-                         คุณต้องการส่งข้อความแจ้งเตือนไปยังลูกบ้านใช่หรือไม่?
+                         {t('phConfirmNotifyMsg')}
                       </Text>
                    </View>
 
@@ -846,7 +890,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                      onPress={() => confirmChangeStatus(true)}
                      style={[styles.optBtn, styles.optConfirmSend, sheetBusy && styles.optDisabled]}
                    >
-                     {sheetBusy ? <ActivityIndicator color="#fff" /> : <Text style={[styles.optText, styles.colorWhite]}>ยืนยันการส่ง</Text>}
+                     {sheetBusy ? <ActivityIndicator color="#fff" /> : <Text style={[styles.optText, styles.colorWhite]}>{t('phConfirmSend')}</Text>}
                    </Pressable>
 
                    <Pressable
@@ -854,7 +898,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                      onPress={() => setSheetStep('confirm_status')}
                      style={[styles.optBtn, styles.optNeutral, styles.optCenter, sheetBusy && styles.optDisabled]}
                    >
-                     <Text style={[styles.optText, styles.colorNeutral]}>ยกเลิก</Text>
+                     <Text style={[styles.optText, styles.colorNeutral]}>{t('cancel')}</Text>
                    </Pressable>
                 </View>
               ) : sheetStep === 'proof' ? (
@@ -865,7 +909,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                      ) : (
                        <View style={styles.proofPlaceholder}>
                          <Ionicons name="image-outline" size={48} color="#ccc" />
-                         <Text style={styles.proofPlaceholderText}>ไม่มีรูป</Text>
+                         <Text style={styles.proofPlaceholderText}>{t('phNoImage')}</Text>
                        </View>
                      )}
                    </View>
@@ -873,11 +917,11 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                    <View style={styles.proofButtonsRow}>
                      <Pressable onPress={handleTakePhoto} style={[styles.optBtn, styles.optWhite]}>
                         <Ionicons name="camera-outline" size={20} color="#333" />
-                        <Text style={[styles.optText, styles.colorDark]}>ถ่ายรูป</Text>
+                        <Text style={[styles.optText, styles.colorDark]}>{t('phTakePhoto')}</Text>
                      </Pressable>
                      <Pressable onPress={handleChooseImage} style={[styles.optBtn, styles.optWhite]}>
                         <Ionicons name="images-outline" size={20} color="#333" />
-                        <Text style={[styles.optText, styles.colorDark]}>เลือกรูป</Text>
+                        <Text style={[styles.optText, styles.colorDark]}>{t('phChooseImage')}</Text>
                      </Pressable>
                    </View>
 
@@ -886,7 +930,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                      onPress={confirmPaymentWithProof}
                      style={[styles.optBtn, styles.optPrimary, (sheetBusy || !proofImage) && styles.optDisabled, styles.optCenter]}
                    >
-                     {sheetBusy ? <ActivityIndicator color="#0F5132" /> : <Text style={[styles.optText, styles.colorPaid]}>ยืนยันการชำระเงิน</Text>}
+                     {sheetBusy ? <ActivityIndicator color="#0F5132" /> : <Text style={[styles.optText, styles.colorPaid]}>{t('phConfirmPayment')}</Text>}
                    </Pressable>
                 </View>
               ) : (
@@ -897,7 +941,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                     style={[styles.optBtn, styles.optNeutral, sheetBusy && styles.optDisabled]}
                   >
                     <Ionicons name="cash-outline" size={18} color="#111827" />
-                    <Text style={[styles.optText, styles.colorDarkText]}>เงินสด</Text>
+                    <Text style={[styles.optText, styles.colorDarkText]}>{t('phCash')}</Text>
                   </Pressable>
                   <Pressable
                     disabled={sheetBusy}
@@ -905,7 +949,7 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
                     style={[styles.optBtn, styles.optNeutral, sheetBusy && styles.optDisabled]}
                   >
                     <Ionicons name="swap-horizontal-outline" size={18} color="#111827" />
-                    <Text style={[styles.optText, styles.colorDarkText]}>โอนธนาคาร</Text>
+                    <Text style={[styles.optText, styles.colorDarkText]}>{t('phBankTransfer')}</Text>
                   </Pressable>
                 </View>
               )}
@@ -913,21 +957,21 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
               <View style={styles.sheetFooter}>
                 {sheetStep === 'method' ? (
                   <Pressable disabled={sheetBusy} onPress={() => setSheetStep('status')} style={styles.footerBtn}>
-                    <Text style={styles.footerBtnText}>ย้อนกลับ</Text>
+                    <Text style={styles.footerBtnText}>{t('phGoBack')}</Text>
                   </Pressable>
                 ) : sheetStep === 'proof' ? (
                   <Pressable disabled={sheetBusy} onPress={() => setSheetStep('method')} style={styles.footerBtn}>
-                    <Text style={styles.footerBtnText}>ย้อนกลับ</Text>
+                    <Text style={styles.footerBtnText}>{t('phGoBack')}</Text>
                   </Pressable>
                 ) : sheetStep === 'confirm_status' ? (
                   <Pressable disabled={sheetBusy} onPress={() => setSheetStep('status')} style={styles.footerBtn}>
-                    <Text style={styles.footerBtnText}>ย้อนกลับ</Text>
+                    <Text style={styles.footerBtnText}>{t('phGoBack')}</Text>
                   </Pressable>
                 ) : (
                   <View />
                 )}
                 <Pressable disabled={sheetBusy} onPress={closeSheet} style={styles.footerBtn}>
-                  <Text style={styles.footerBtnText}>ปิด</Text>
+                  <Text style={styles.footerBtnText}>{t('phClose')}</Text>
                 </Pressable>
               </View>
             </>
@@ -949,6 +993,12 @@ const PaymentHistory: React.FC<Props> = ({ house: propHouse, houseNumber, isAdmi
           )}
         </View>
       </Modal>
+
+      <RepairCameraModal
+        visible={cameraVisible}
+        onClose={() => setCameraVisible(false)}
+        onCapture={onCameraCapture}
+      />
     </View>
   );
 };
@@ -970,20 +1020,70 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 12,
+    paddingBottom: 28,
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#DCE3EC',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 1,
   },
   cardHeader: {
+    marginBottom: 10,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  houseIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: '#EEF2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  headerMeta: { flex: 1 },
+  datePill: {
+    marginTop: 5,
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: '#F6F8FB',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E6ECF3',
   },
+  metricsWrap: {
+    borderWidth: 1,
+    borderColor: '#E6ECF3',
+    borderRadius: 12,
+    backgroundColor: '#FAFCFE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  totalRowBox: {
+    marginTop: 10,
+    borderRadius: 12,
+    backgroundColor: '#F2FAF5',
+    borderWidth: 1,
+    borderColor: '#CDEBD7',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabel: { color: '#0F5132', fontWeight: '800', fontSize: 14 },
+  totalValue: { color: '#046C4E', fontWeight: '900', fontSize: 18 },
   cardTitle: {
     fontWeight: '800',
     color: '#0F9D58',
@@ -992,32 +1092,42 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
     borderColor: '#FDE68A',
   },
-  chipPaid: { backgroundColor: '#D1FAE5' },
-  chipPending: { backgroundColor: '#FEF3C7' },
-  chipOverdue: { backgroundColor: '#FEE2E2' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  title: { fontWeight: '800', fontSize: 15, marginLeft: 6 },
-  date: { color: '#666', fontSize: 12 },
-  label: { color: '#444', fontWeight: '700' },
-  val: { color: '#111', fontWeight: '700' },
-  note: { color: '#666', marginTop: 8 },
-  scheduleHeader: { color: '#4B5563', fontSize: 12, marginTop: 6, marginBottom: 6 },
+  chipPaid: { backgroundColor: '#E8F7EE', borderColor: '#CDEBD7' },
+  chipPending: { backgroundColor: '#EEF4FF', borderColor: '#CADCFF' },
+  chipOverdue: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  title: { fontWeight: '800', fontSize: 17, color: '#111827' },
+  date: { color: '#64748B', fontSize: 12, fontWeight: '600', marginLeft: 4 },
+  label: { color: '#475569', fontWeight: '700', fontSize: 13 },
+  val: { color: '#0F172A', fontWeight: '800', fontSize: 15 },
+  noteBox: {
+    marginTop: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  note: { color: '#475569', fontSize: 12, lineHeight: 17 },
+  noteLabel: { color: '#334155', fontWeight: '800' },
+  scheduleHeader: { color: '#334155', fontSize: 12, fontWeight: '700', marginTop: 8, marginBottom: 8 },
   scheduleWrap: { flexDirection: 'row', flexWrap: 'wrap' },
   scheduleItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
     marginRight: 6,
     marginBottom: 6,
   },
-  scheduleRound: { fontWeight: '800', fontSize: 12, color: '#2563EB', marginRight: 6 },
-  scheduleDate: { fontWeight: '700', fontSize: 12, color: '#111827' },
-  listHeader: { color: '#374151', fontSize: 12, marginBottom: 6 },
+  scheduleRound: { fontWeight: '800', fontSize: 12, color: '#2563EB', marginRight: 4 },
+  scheduleDate: { fontWeight: '700', fontSize: 12, color: '#334155' },
+  listHeader: { color: '#0F172A', fontSize: 12, fontWeight: '700', marginBottom: 8 },
   instRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1033,20 +1143,22 @@ const styles = StyleSheet.create({
   userInstRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEF1F4',
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 8,
   },
   userCol: { flex: 1 },
-  userLabel: { fontSize: 11, fontWeight: '700', color: '#667085' },
-  userValue: { fontSize: 13, fontWeight: '800', color: '#111827', marginTop: 2 },
+  userLabel: { fontSize: 10, fontWeight: '700', color: '#64748B' },
+  userValue: { fontSize: 13, fontWeight: '800', color: '#0F172A', marginTop: 2 },
   userStatusCol: { minWidth: 90, alignItems: 'flex-end' },
-  userStatus: { fontSize: 12, fontWeight: '800' },
-  userStatusPaid: { color: '#22A06B' },
-  userStatusPending: { color: '#665C00' },
-  userStatusOverdue: { color: '#C0392B' },
+  userStatus: { fontSize: 11, fontWeight: '800', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden' },
+  userStatusPaid: { color: '#065F46', backgroundColor: '#E8F7EE' },
+  userStatusPending: { color: '#334155', backgroundColor: '#EAF1FF' },
+  userStatusOverdue: { color: '#991B1B', backgroundColor: '#FEE2E2' },
   instTitle: { fontWeight: '800', fontSize: 13, color: '#111827' },
   instSub: { fontWeight: '600', fontSize: 12, color: '#6B7280', marginTop: 2 },
   instAmount: { fontWeight: '800', fontSize: 12, color: '#111827', marginRight: 8 },
@@ -1055,7 +1167,7 @@ const styles = StyleSheet.create({
   badgePaid: { backgroundColor: '#D1FAE5' },
   badgePending: { backgroundColor: '#FEF3C7' },
   badgeOverdue: { backgroundColor: '#FEE2E2' },
-  // จุดสถานะ (user fallback)
+  // เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ’เน€เธยเน€เธเธ (user fallback)
   statusDot: {
     width: 8,
     height: 8,
@@ -1066,7 +1178,7 @@ const styles = StyleSheet.create({
   dotPaid: { backgroundColor: '#22A06B' },
   dotPending: { backgroundColor: '#FEF3C7' },
   dotOverdue: { backgroundColor: '#C0392B' },
-  userStatusMeta: { fontSize: 11, color: '#6B7280', marginTop: 2, fontWeight: '700', textAlign: 'right' },
+  userStatusMeta: { fontSize: 11, color: '#64748B', marginTop: 4, fontWeight: '700', textAlign: 'right' },
   // ----- Bottom Sheet -----
   sheetBackdrop: {
     position: 'absolute',
@@ -1147,46 +1259,55 @@ const styles = StyleSheet.create({
   imageViewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   imageViewerClose: { position: 'absolute', top: 40, right: 20, zIndex: 10 },
   imageViewerImage: { width: '90%', height: '80%', resizeMode: 'contain' },
+  // Waiting Approval Sheet
+  waitingApprovalContainer: { alignItems: 'center', paddingVertical: 20 },
+  waitingApprovalIcon: { marginBottom: 10 },
+  waitingApprovalTitle: { color: '#4B5563', fontSize: 16, fontWeight: '600' },
+  waitingApprovalSubtitle: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 5 },
 });
 
-// เลือก "งวดล่าสุดสำหรับผู้ใช้" โดยให้ค้างชำระมาก่อน (อิงสถานะ DB และ period_end)
+// เน€เธโฌเน€เธเธ…เน€เธเธ—เน€เธเธเน€เธย "เน€เธยเน€เธเธเน€เธโ€เน€เธเธ…เน€เธยเน€เธเธ’เน€เธเธเน€เธเธเน€เธโ€เน€เธเธเน€เธเธ“เน€เธเธเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธย" เน€เธยเน€เธโ€เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ“เน€เธเธเน€เธเธเน€เธเธเน€เธเธ’เน€เธยเน€เธยเน€เธเธเน€เธย (เน€เธเธเน€เธเธ”เน€เธยเน€เธเธเน€เธโ€“เน€เธเธ’เน€เธยเน€เธเธ DB เน€เธยเน€เธเธ…เน€เธเธ period_end)
 const pickNextInstallment = (list: PaymentInstallment[]) => {
   if (!list || list.length === 0) return null;
   const today = new Date();
   const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const time = (r: PaymentInstallment) => parseMySqlDateTime(r.due_date).getTime();
-  const notPaid = (r: PaymentInstallment) => r.status !== 'paid';
+  const notPaid = (r: PaymentInstallment) => r.status !== 'paid' && r.status !== 'waiting_approval';
 
-  // 1) ถ้ามีค้างชำระ (จาก DB หรือ period_end < วันนี้) ให้แสดงตัวที่ใกล้วันนี้ที่สุดก่อน
+  // 0) Priority: If there is any installment waiting for approval, show it first
+  const waiting = list.filter(r => r.status === 'waiting_approval').sort((a, b) => time(a) - time(b));
+  if (waiting.length) return waiting[0];
+
+  // 1) เน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธ’เน€เธเธเน€เธเธ•เน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ“เน€เธเธเน€เธเธ (เน€เธยเน€เธเธ’เน€เธย DB เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย period_end < เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ•เน€เธย) เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธยเน€เธยเน€เธเธเน€เธย
   const overdue = list
     .filter((r) => {
       if (!notPaid(r)) return false;
-      if (r.status === 'overdue') return true; // ยึดตาม DB
+      if (r.status === 'overdue') return true; // เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€“เน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธย DB
       const pe = parseMySqlDate(r.period_end);
       const peKey = pe ? pe.getTime() : null;
-      // ถ้าเลย period_end แล้วก็ถือว่าค้างชำระ
+      // เน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธย period_end เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธเธ—เน€เธเธเน€เธเธเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธยเน€เธเธ“เน€เธเธเน€เธเธ
       if (peKey != null && peKey < todayKey) return true;
-      // เดิม: ถ้า due_date เลยแล้ว
+      // เน€เธโฌเน€เธยเนยเธเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธย: เน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธ’ due_date เน€เธโฌเน€เธยเนยเธเน€เธเธ…เน€เธเธเน€เธยเน€เธเธ…เน€เธยเน€เธเธ
       return time(r) < todayKey;
     })
     .sort((a, b) => time(b) - time(a));
   if (overdue.length) return overdue[0];
 
-  // 2) ถ้าไม่มีก็ค้นหางวดถัดไปจากวันนี้ (ยังไม่จ่าย)
+  // 2) เน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเนโฌยเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธยเน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธ•เน€เธย (เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธเธ)
   const upcoming = list.filter((r) => notPaid(r) && time(r) >= todayKey).sort((a, b) => time(a) - time(b));
   if (upcoming.length) return upcoming[0];
 
-  // 3) จ่ายครบแล้ว -> แสดงรายการที่วันที่มากสุด
+  // 3) เน€เธยเน€เธยเน€เธเธ’เน€เธเธเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธเธ -> เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€ขเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌย
   const allPaid = [...list].sort((a, b) => time(b) - time(a));
   return allPaid[0];
 };
 
-// คำนวณสถานะเพื่อโชว์ (ให้เคารพ DB overdue และ period_end)
+// เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนยเธเน€เธยเน€เธเธ—เน€เธยเน€เธเธเน€เธยเน€เธยเน€เธเธเน€เธย (เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนยเธเน€เธยเน€เธเธ’เน€เธเธเน€เธย DB overdue เน€เธยเน€เธเธ…เน€เธเธ period_end)
 const getInstallmentStatus = (r: PaymentInstallment): 'pending' | 'paid' | 'overdue' | 'waiting_approval' => {
   if (!r) return 'pending';
   if (r.status === 'paid') return 'paid';
   if (r.status === 'waiting_approval') return 'waiting_approval';
-  // ถ้า DB เป็น overdue ให้แสดง overdue ทันที
+  // เน€เธโฌเน€เธยเนโฌโ€เน€เธยเน€เธเธ’ DB เน€เธโฌเน€เธยเนยเธเน€เธยเน€เธยเน€เธย overdue เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌยเน€เธย overdue เน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€ข
   if (r.status === 'overdue') return 'overdue';
   const today = new Date();
   const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -1196,7 +1317,7 @@ const getInstallmentStatus = (r: PaymentInstallment): 'pending' | 'paid' | 'over
   return t < todayKey ? 'overdue' : 'pending';
 };
 
-// รายการค้างชำระทั้งหมด (ยังไม่จ่าย และเป็น overdue ตาม DB หรือ period_end หรือ due_date)
+// เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌโ€เน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนโฌย (เน€เธเธเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธยเน€เธยเน€เธเธ’เน€เธเธ เน€เธโฌเน€เธยเธขยเน€เธโฌเน€เธยเน€เธโ€ฆเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเนยเธเน€เธยเน€เธยเน€เธย overdue เน€เธโฌเน€เธยเนโฌเธเน€เธโฌเน€เธยเน€เธโ€เน€เธโฌเน€เธยเน€เธย DB เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย period_end เน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธยเน€เธโฌเน€เธยเน€เธโ€”เน€เธโฌเน€เธยเน€เธย due_date)
 const pickOverdueInstallments = (list: PaymentInstallment[]) => {
   const today = new Date();
   const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -1210,7 +1331,9 @@ const pickOverdueInstallments = (list: PaymentInstallment[]) => {
       if (pe && pe.getTime() < todayKey) return true;
       return time(r) < todayKey;
     })
-    .sort((a, b) => time(a) - time(b)); // ใกล้ปัจจุบันก่อน
+    .sort((a, b) => time(a) - time(b)); // เน€เธยเน€เธยเน€เธเธ…เน€เธยเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธเธเน€เธยเน€เธเธ‘เน€เธยเน€เธยเน€เธยเน€เธเธเน€เธย
 };
+
+
 
 

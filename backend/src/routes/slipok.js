@@ -3,10 +3,11 @@ const fs = require('fs-extra');
 const multer = require('multer');
 const axios = require('axios');
 const sharp = require('sharp');
-const FormData = require('form-data');
-const { HOST, PORT, SLIPOK_API, SLIPOK_KEY, PROMPTPAY_ID } = require('../config/env');
+
+const { HOST, PORT, SLIP2GO_API, SLIP2GO_SECRET, PROMPTPAY_ID: ENV_PROMPTPAY_ID } = require('../config/env');
 const { UPLOAD_DIR, PROCESSED_DIR } = require('../config/paths');
 const { pool } = require('../db/pool');
+const { QR_EXPIRY_MINUTES, removeCachedQRByFilename } = require('../utils/qr');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -16,70 +17,471 @@ const fileFilter = (req, file, cb) => {
   if (/^image\/(jpeg|jpg|png|webp|heic|heif)$/i.test(file.mimetype)) cb(null, true);
   else cb(new Error('รองรับเฉพาะไฟล์รูป jpeg/png/webp/heic/heif'), false);
 };
-const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
+const RECEIPT_DIR = path.join(UPLOAD_DIR, 'receipts');
+fs.ensureDirSync(RECEIPT_DIR);
 
 const normalize = (u) => String(u || '').replace(/\/+$/,'');
-// ต้องเป็นรูปแบบ: https://api.slipok.com/api/line/apikey/{branchId}
-const resolveSlipOkUrl = () => {
-  const base = normalize(SLIPOK_API || '');
-  if (/\/api\/line\/apikey\/\w+$/i.test(base)) return base;
-  // เผื่อเผลอใส่ base แบบ /api เฉยๆ
-  return `${normalize(base || 'https://api.slipok.com/api')}/line/apikey/${process.env.SLIPOK_BRANCH_ID || ''}`;
+const toNonEmptyString = (v) => {
+  if (v == null) return '';
+  const s = String(v).trim();
+  return s;
 };
+
+function escapeXml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function formatMoney(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return '0.00';
+  return n.toLocaleString('th-TH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatReceiptDateTime(input) {
+  const d = input ? new Date(input) : new Date();
+  const dt = Number.isNaN(d.getTime()) ? new Date() : d;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+}
+
+function toSingleLineText(value, fallback = '-') {
+  const text = String(value == null ? '' : value)
+    .replace(/[\r\n\t]+/g, ' ')
+    .trim();
+  return text || fallback;
+}
+
+function maskPromptPay(promptPayId) {
+  const digits = String(promptPayId || '').replace(/\D/g, '');
+  if (!digits) return '-';
+  if (digits.length <= 4) return digits;
+  return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function compactRef(value) {
+  const raw = String(value == null ? '' : value).replace(/\s+/g, '').trim();
+  if (!raw) return `REF-${Date.now()}`;
+  if (raw.length <= 32) return raw;
+  return `${raw.slice(0, 32)}...`;
+}
+
+function buildBankSlipSvg({
+  amount,
+  senderName,
+  sendingBank,
+  paidAt,
+  houseNumber,
+  receiverName,
+  promptPayId,
+  reference,
+  receiptNo,
+}) {
+  const amountText = `${formatMoney(amount)} THB`;
+  const dateText = formatReceiptDateTime(paidAt);
+  const payerText = toSingleLineText(senderName, 'Unknown sender');
+  const senderBankText = toSingleLineText(sendingBank, 'Unknown bank');
+  const receiverText = toSingleLineText(receiverName, 'Village Juristic Person');
+  const houseText = toSingleLineText(houseNumber, '-');
+  const promptPayMasked = maskPromptPay(promptPayId);
+  const refText = compactRef(reference || receiptNo);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1C4CC4"/>
+      <stop offset="100%" stop-color="#0B2A7E"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <rect x="48" y="48" width="984" height="1824" rx="44" fill="#FFFFFF"/>
+
+  <text x="90" y="130" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#0F172A">MOBILE BANKING</text>
+  <text x="90" y="182" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="600" fill="#16A34A">PAYMENT SUCCESS</text>
+
+  <circle cx="942" cy="146" r="56" fill="#16A34A"/>
+  <path d="M914 148 L936 170 L972 126" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="90" y="320" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#334155">Amount</text>
+  <text x="90" y="398" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="700" fill="#0F172A">${escapeXml(amountText)}</text>
+
+  <line x1="90" y1="450" x2="990" y2="450" stroke="#E2E8F0" stroke-width="2"/>
+
+  <text x="90" y="530" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#64748B">Date / Time</text>
+  <text x="90" y="574" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="600" fill="#0F172A">${escapeXml(dateText)}</text>
+
+  <text x="90" y="656" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#64748B">Reference</text>
+  <text x="90" y="700" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="600" fill="#0F172A">${escapeXml(refText)}</text>
+
+  <text x="90" y="782" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#64748B">Sender</text>
+  <text x="90" y="826" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="600" fill="#0F172A">${escapeXml(payerText)}</text>
+  <text x="90" y="870" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#334155">${escapeXml(senderBankText)}</text>
+
+  <text x="90" y="952" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#64748B">Receiver</text>
+  <text x="90" y="996" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="600" fill="#0F172A">${escapeXml(receiverText)}</text>
+  <text x="90" y="1040" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#334155">PromptPay ${escapeXml(promptPayMasked)}</text>
+
+  <text x="90" y="1122" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#64748B">House Number</text>
+  <text x="90" y="1166" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="600" fill="#0F172A">${escapeXml(houseText)}</text>
+
+  <rect x="90" y="1280" width="900" height="240" rx="24" fill="#EFF6FF"/>
+  <text x="130" y="1368" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#1E3A8A">Digital Slip</text>
+  <text x="130" y="1420" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#334155">This image is generated after successful slip verification.</text>
+  <text x="130" y="1470" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#334155">Receipt No: ${escapeXml(receiptNo)}</text>
+
+  <text x="90" y="1710" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#64748B">Generated by payment verification service</text>
+</svg>`;
+}
+
+async function createBankSlipImage({
+  amount,
+  senderName,
+  sendingBank,
+  paidAt,
+  houseNumber,
+  receiverName,
+  promptPayId,
+  reference,
+}) {
+  const nowMs = Date.now();
+  const suffix = `${nowMs}-${Math.floor(Math.random() * 1e6).toString().padStart(6, '0')}`;
+  const receiptNo = `SLIP-${suffix}`;
+  const filename = `bank-slip-${suffix}.png`;
+  const outputPath = path.join(RECEIPT_DIR, filename);
+
+  const svg = buildBankSlipSvg({
+    amount,
+    senderName,
+    sendingBank,
+    paidAt,
+    houseNumber,
+    receiverName,
+    promptPayId,
+    reference,
+    receiptNo,
+  });
+
+  await sharp(Buffer.from(svg))
+    .png({ compressionLevel: 9, quality: 92 })
+    .toFile(outputPath);
+
+  return {
+    receiptNo,
+    filename,
+    url: `http://${HOST}:${PORT}/uploads/receipts/${filename}`,
+  };
+}
+
+async function getRuntimeSetting(app, key, fallbackValue) {
+  try {
+    if (typeof app?.getSetting === 'function') {
+      const val = await app.getSetting(key);
+      const normalized = toNonEmptyString(val);
+      if (normalized) return normalized;
+    }
+  } catch (e) {
+    console.warn(`[slip-check] getSetting(${key}) failed:`, e.message);
+  }
+  return toNonEmptyString(fallbackValue);
+}
+
+const normalizePromptPayId = (v) => String(v || '').replace(/\D/g, '').trim();
+
+function tryParseJsonObject(input) {
+  if (!input || typeof input !== 'string') return null;
+  try {
+    const parsed = JSON.parse(input);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+  } catch {
+    // Ignore invalid JSON.
+  }
+  return null;
+}
+
+function toObject(input) {
+  if (input && typeof input === 'object' && !Array.isArray(input)) return input;
+  return {};
+}
+
+function toBooleanLike(input) {
+  if (typeof input === 'boolean') return input;
+  if (typeof input === 'number') {
+    if (input === 1) return true;
+    if (input === 0) return false;
+    return null;
+  }
+  if (typeof input !== 'string') return null;
+  const v = input.trim().toLowerCase();
+  if (v === 'true' || v === '1') return true;
+  if (v === 'false' || v === '0') return false;
+  return null;
+}
+
+function normalizeImageBase64(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(raw)) return raw;
+  return `data:image/jpeg;base64,${raw}`;
+}
+
+function parsePayloadInput(input) {
+  if (typeof input === 'string') return tryParseJsonObject(input) || {};
+  return toObject(input);
+}
+
+function normalizeCheckCondition(payloadInput, amountFromBody) {
+  const checkCondition = toObject(payloadInput.checkCondition);
+
+  const rootCheckDuplicate = toBooleanLike(payloadInput.checkDuplicate);
+  if (rootCheckDuplicate !== null && typeof checkCondition.checkDuplicate !== 'boolean') {
+    checkCondition.checkDuplicate = rootCheckDuplicate;
+  }
+
+  if (payloadInput.checkAmount && !checkCondition.checkAmount) checkCondition.checkAmount = payloadInput.checkAmount;
+  if (payloadInput.checkReceiver && !checkCondition.checkReceiver) checkCondition.checkReceiver = payloadInput.checkReceiver;
+  if (payloadInput.checkDate && !checkCondition.checkDate) checkCondition.checkDate = payloadInput.checkDate;
+
+  if (typeof checkCondition.checkDuplicate !== 'boolean') {
+    checkCondition.checkDuplicate = true;
+  }
+
+  if (!checkCondition.checkAmount && !Number.isNaN(amountFromBody) && amountFromBody > 0) {
+    checkCondition.checkAmount = { type: 'eq', amount: amountFromBody };
+  }
+
+  return checkCondition;
+}
+
+async function getRuntimePromptPayId(app) {
+  const rawSetting = toNonEmptyString(await getRuntimeSetting(app, 'promptpay_id', ''));
+  if (rawSetting) {
+    const fromSettings = normalizePromptPayId(rawSetting);
+    if (/^\d{10}$/.test(fromSettings)) return fromSettings;
+    return '';
+  }
+  const fromEnv = normalizePromptPayId(ENV_PROMPTPAY_ID);
+  if (/^\d{10}$/.test(fromEnv)) return fromEnv;
+  return '';
+}
+
+// รองรับทั้ง base URL และ endpoint เต็มของ Slip2Go
+const resolveSlip2GoUrl = (apiBase) => {
+  const base = normalize(apiBase || '');
+  const defaultEndpoint = 'https://api.slip2go.com/api/verify-slip/qr-code/info';
+
+  if (!base) return defaultEndpoint;
+  if (/slipok\.com/i.test(base)) return defaultEndpoint;
+  if (/\/api\/verify-slip\/qr-base64\/info$/i.test(base)) return base.replace(/qr-base64\/info$/i, 'qr-code/info');
+  if (/\/api\/verify-slip\/qr-code\/info$/i.test(base)) return base;
+  if (/\/api$/i.test(base)) return `${base}/verify-slip/qr-code/info`;
+  if (/\/api\/verify-slip$/i.test(base)) return `${base}/qr-code/info`;
+  return `${base}/api/verify-slip/qr-code/info`;
+};
+
+const resolveSlip2GoBase64Url = (apiBase) => {
+  const base = normalize(apiBase || '');
+  const defaultEndpoint = 'https://connect.slip2go.com/api/verify-slip/qr-base64/info';
+
+  if (!base) return defaultEndpoint;
+  if (/slipok\.com/i.test(base)) return defaultEndpoint;
+  if (/\/api\/verify-slip\/qr-base64\/info$/i.test(base)) return base;
+  if (/\/api\/verify-slip\/qr-code\/info$/i.test(base)) return base.replace(/qr-code\/info$/i, 'qr-base64/info');
+  if (/\/api$/i.test(base)) return `${base}/verify-slip/qr-base64/info`;
+  if (/\/api\/verify-slip$/i.test(base)) return `${base}/qr-base64/info`;
+  return `${base}/api/verify-slip/qr-base64/info`;
+};
+
+function uniqueUrls(urls) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of urls || []) {
+    const u = toNonEmptyString(raw);
+    if (!u) continue;
+    if (seen.has(u)) continue;
+    seen.add(u);
+    out.push(u);
+  }
+  return out;
+}
+
+function buildSlip2GoCandidates(apiBase, mode) {
+  const base = normalize(apiBase || '');
+  const isCode = mode === 'code';
+  const endpoint = isCode ? 'qr-code/info' : 'qr-base64/info';
+  const candidates = [];
+
+  if (base && !/slipok\.com/i.test(base)) {
+    if (/\/api\/verify-slip\/qr-(code|base64)\/info$/i.test(base)) {
+      candidates.push(base.replace(/qr-(code|base64)\/info$/i, endpoint));
+    } else if (/\/api$/i.test(base)) {
+      candidates.push(`${base}/verify-slip/${endpoint}`);
+    } else if (/\/api\/verify-slip$/i.test(base)) {
+      candidates.push(`${base}/${endpoint}`);
+    } else {
+      candidates.push(`${base}/api/verify-slip/${endpoint}`);
+    }
+  }
+
+  if (isCode) {
+    candidates.push('https://api.slip2go.com/api/verify-slip/qr-code/info');
+    candidates.push('https://connect.slip2go.com/api/verify-slip/qr-code/info');
+  } else {
+    candidates.push('https://connect.slip2go.com/api/verify-slip/qr-base64/info');
+    candidates.push('https://api.slip2go.com/api/verify-slip/qr-base64/info');
+  }
+
+  return uniqueUrls(candidates);
+}
+
+function providerBodyToText(data) {
+  if (typeof data === 'string') return data;
+  if (data && typeof data?.message === 'string') return data.message;
+  try {
+    return JSON.stringify(data || '');
+  } catch {
+    return String(data || '');
+  }
+}
+
+function isProviderEndpointNotFound(resp) {
+  const status = Number(resp?.status || 0);
+  const message = providerBodyToText(resp?.data);
+  return status === 404 && /cannot\s+post\s+\/api\/verify-slip\/qr-(code|base64)\/info/i.test(message);
+}
+
+async function postWithCandidateUrls(urls, requestFactory) {
+  let lastResp = null;
+  let lastUrl = null;
+  let lastError = null;
+
+  for (const url of urls) {
+    try {
+      const resp = await requestFactory(url);
+      lastResp = resp;
+      lastUrl = url;
+      if (!isProviderEndpointNotFound(resp)) {
+        return { resp, url, tried: urls };
+      }
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  if (lastResp) return { resp: lastResp, url: lastUrl, tried: urls };
+  if (lastError) throw lastError;
+  throw new Error('No Slip2Go endpoint candidate available');
+}
 
 function registerSlipOkRoutes(app) {
   app.post('/upload-and-check', upload.single('file'), async (req, res) => {
     try {
-      if (!req.file) return res.status(400).json({ ok: false, message: 'ไม่ได้ส่งไฟล์มา' });
-      if (!SLIPOK_KEY) return res.status(500).json({ ok: false, message: 'ยังไม่ได้ตั้ง SLIPOK_KEY' });
+      // Priority: system_settings (new keys -> legacy keys) -> .env
+      const slip2goSecret =
+        toNonEmptyString(await getRuntimeSetting(app, 'slip2go_secret', ''))
+        || toNonEmptyString(await getRuntimeSetting(app, 'slipok_key', ''))
+        || toNonEmptyString(SLIP2GO_SECRET);
+      const slip2goApi =
+        toNonEmptyString(await getRuntimeSetting(app, 'slip2go_api', ''))
+        || toNonEmptyString(await getRuntimeSetting(app, 'slipok_api', ''))
+        || toNonEmptyString(SLIP2GO_API);
+      if (!slip2goSecret) return res.status(500).json({ ok: false, message: 'ยังไม่ได้ตั้ง SLIP2GO_SECRET' });
 
-      // 1) บีบอัดภาพก่อนส่ง
-      const originalPath = path.join(UPLOAD_DIR, req.file.filename);
-      const baseName = path.parse(req.file.filename).name;
-      const compressedName = `${baseName}-compressed.jpg`;
-      const compressedPath = path.join(PROCESSED_DIR, compressedName);
+      const payloadFromBody = parsePayloadInput(req.body?.payload);
+      let directImageBase64 = normalizeImageBase64(
+        req.body?.imageBase64 || payloadFromBody.imageBase64
+      );
+      const amountFromBody = Number(req.body?.amount);
+      const checkCondition = normalizeCheckCondition(payloadFromBody, amountFromBody);
 
-      await sharp(originalPath)
-        .rotate()
-        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 80, mozjpeg: true })
-        .toFile(compressedPath);
+      let compressedName = null;
+      let compressedPath = null;
+      let originalUrl = null;
+      let compressedUrl = null;
+      let providerMode = 'base64';
+      let providerEndpoint = '';
 
-      // 2) สร้าง multipart/form-data: field "files"
-      const fd = new FormData();
-      fd.append('files', fs.createReadStream(compressedPath), {
-        filename: compressedName,
-        contentType: 'image/jpeg',
-      });
-      fd.append('log', 'true');
-      if (req.body?.amount) fd.append('amount', String(req.body.amount));
-
-      const url = resolveSlipOkUrl();
+      // ===== Compress image + convert to base64 if file uploaded =====
       let resp;
-      try {
-        resp = await axios.post(url, fd, {
+      if (req.file) {
+        providerMode = 'image';
+        const originalPath = path.join(UPLOAD_DIR, req.file.filename);
+        const baseName = path.parse(req.file.filename).name;
+        compressedName = `${baseName}-compressed.jpg`;
+        compressedPath = path.join(PROCESSED_DIR, compressedName);
+
+        await sharp(originalPath)
+          .rotate()
+          .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80, mozjpeg: true })
+          .toFile(compressedPath);
+
+        originalUrl = `http://${HOST}:${PORT}/uploads/${req.file.filename}`;
+        compressedUrl = `http://${HOST}:${PORT}/uploads/repairs/${compressedName}`;
+
+        const compressedBuffer = await fs.readFile(compressedPath);
+        directImageBase64 = normalizeImageBase64(compressedBuffer.toString('base64'));
+      }
+
+      // ===== ส่ง base64 ไปตรวจผ่าน qr-base64/info =====
+      const imageBase64 = directImageBase64;
+      if (!imageBase64) {
+        return res.status(400).json({
+          ok: false,
+          message: 'ไม่ได้ส่งไฟล์หรือ imageBase64 มา',
+        });
+      }
+
+      const providerRequest = {
+        payload: {
+          imageBase64,
+          ...(Object.keys(checkCondition).length ? { checkCondition } : {}),
+        },
+      };
+
+      const base64Urls = buildSlip2GoCandidates(slip2goApi, 'base64');
+      console.log('[slip-check] DEBUG candidate URLs:', base64Urls);
+      console.log('[slip-check] DEBUG checkCondition:', JSON.stringify(checkCondition));
+      console.log('[slip-check] DEBUG base64 length:', imageBase64.length);
+
+      const base64Result = await postWithCandidateUrls(base64Urls, async (url) => {
+        console.log('[slip-check] DEBUG trying URL:', url);
+        return axios.post(url, providerRequest, {
           headers: {
-            ...fd.getHeaders(),
-            'x-authorization': SLIPOK_KEY,
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${slip2goSecret}`,
             Accept: 'application/json',
           },
           maxBodyLength: Infinity,
           maxContentLength: Infinity,
           timeout: 20000,
+          validateStatus: () => true,
         });
-      } catch (err) {
-        const payload = err?.response?.data || {};
-        // SlipOK: code 1012 = Duplicate slip
-        if (payload?.code === 1012) {
-          return res.status(409).json({
-            ok: false,
-            code: 'SLIP_DUPLICATE',
-            message: 'สลิปซ้ำ กรุณาแจ้งเจ้าหน้าที่',
-            provider: payload,
-          });
-        }
-        // SlipOK: code 1011 = expired or no transaction
-        if (payload?.code === 1011) {
+      });
+      resp = base64Result.resp;
+      providerEndpoint = base64Result.url || '';
+
+      console.log('[slip-check] DEBUG response status:', resp?.status);
+      console.log('[slip-check] DEBUG response data:', JSON.stringify(resp?.data, null, 2));
+
+      // ===== ดึงค่าที่ต้องการ =====
+      const payload = resp?.data || {};
+      const providerCode = String(payload?.code || '');
+      const d = payload?.data || {};
+      const slipSuccess = ['200000', '200200'].includes(providerCode);
+      const slipDuplicate = providerCode === '200501';
+
+      // สลิปซ้ำ (200501) ยังมี data กลับมาให้ตรวจ receiver/amount ได้
+      if (!slipSuccess && !slipDuplicate) {
+        if (providerCode === '200404') {
           return res.status(400).json({
             ok: false,
             code: 'SLIP_EXPIRED_OR_NO_TXN',
@@ -87,8 +489,7 @@ function registerSlipOkRoutes(app) {
             provider: payload,
           });
         }
-        // SlipOK: code 1014 = invalid receiver account
-        if (payload?.code === 1014) {
+        if (providerCode === '200401') {
           return res.status(400).json({
             ok: false,
             code: 'INVALID_RECEIVER',
@@ -96,61 +497,127 @@ function registerSlipOkRoutes(app) {
             provider: payload,
           });
         }
-        // SlipOK: code 1007 = No QR code in image
-        if (payload?.code === 1007) {
+        if (providerCode === '200402') {
           return res.status(400).json({
             ok: false,
-            code: 'NO_QR_IN_IMAGE',
-            message: 'รูปภาพไม่มี QR Code',
+            code: 'AMOUNT_MISMATCH_PROVIDER',
+            message: 'จำนวนเงินไม่ถูกต้อง กรุณาติดต่อเจ้าหน้าที่',
             provider: payload,
           });
         }
-        // อื่นๆ ส่งต่อเป็น error ปกติ
-        console.error('[slipok] error(post):', payload || err.message);
-        return res.status(502).json({
+        if (providerCode === '200500') {
+          return res.status(400).json({
+            ok: false,
+            code: 'SLIP_FRAUD',
+            message: 'สลิปไม่ถูกต้อง กรุณาอัปโหลดใหม่',
+            provider: payload,
+          });
+        }
+        if (providerCode === '400001' || providerCode === '400002') {
+          return res.status(400).json({
+            ok: false,
+            code: 'NO_QR_IN_IMAGE',
+            message: 'รูปภาพไม่ถูกต้องหรือไม่มี QR Code',
+            provider: payload,
+          });
+        }
+        if (/^401/.test(providerCode)) {
+          return res.status(500).json({
+            ok: false,
+            code: 'SLIP_PROVIDER_AUTH_FAILED',
+            message: 'ตั้งค่า Slip2Go ไม่ถูกต้อง กรุณาตรวจสอบ API Secret',
+            provider: payload,
+          });
+        }
+
+        const statusCode = resp?.status >= 400 && resp?.status < 500 ? 400 : 502;
+        console.error('[slip-check] provider error:', payload || resp?.status);
+        return res.status(statusCode).json({
           ok: false,
-          message: 'ตรวจสลิปไม่สำเร็จ',
-          error: payload || err.message,
+          code: 'SLIP_PROVIDER_FAILED',
+          message: payload?.message || 'ตรวจสลิปไม่สำเร็จ',
+          provider: payload,
         });
       }
 
-      const originalUrl = `http://${HOST}:${PORT}/uploads/${req.file.filename}`;
-      const compressedUrl = `http://${HOST}:${PORT}/uploads/repairs/${compressedName}`;
-
-      // ===== ดึงค่าที่ต้องการ =====
-      const payload = resp?.data || {};
-      const d = payload?.data || {};
-      const slipSuccess = payload?.success === true || d?.success === true;
+      let intentForCleanup = null;
 
       // อ่าน intentId ที่ส่งมาด้วย (multipart field: intentId หรือ intent_id)
       const intentId =
         Number(req.body?.intentId || req.body?.intent_id || req.query?.intentId || 0) || null;
 
       // amount บนสลิป (ถ้ามี) หรือจากฟอร์ม
-       const amount =
-         d?.amount != null && !Number.isNaN(Number(d.amount))
-           ? Number(d.amount)
-           : req.body?.amount != null && !Number.isNaN(Number(req.body.amount))
-           ? Number(req.body.amount)
-           : null;
+      const amount =
+        d?.amount != null && !Number.isNaN(Number(d.amount))
+          ? Number(d.amount)
+          : req.body?.amount != null && !Number.isNaN(Number(req.body.amount))
+          ? Number(req.body.amount)
+          : null;
 
-       const qrcodeData =
-         req.body?.qrcodeData ||
-         d?.qrString ||
-         d?.qrstring ||
-         d?.qr_code ||
-         d?.qr ||
-         null;
-       const sendingBank = d?.sendingBank || null;
-       const transDate = d?.transDate || null;
-       const transTime = d?.transTime || null;
+      const qrcodeData =
+        req.body?.qrcodeData
+        || d?.decode
+        || d?.qrString
+        || d?.qrstring
+        || d?.qr_code
+        || d?.qr
+        || null;
 
-      // ===== Validation เมื่อ success:true =====
-      if (slipSuccess) {
-        // 1) ตรวจจำนวนเงินตรงกับ payment_intents (ถ้าระบุ intentId)
+      const sendingBank = d?.sender?.bank?.name || d?.sender?.bank?.id || d?.sendingBank || null;
+      const senderName = d?.sender?.account?.name || null;
+
+      const dateTimeRaw = d?.dateTime || null;
+      let transDate = d?.transDate || null;
+      let transTime = d?.transTime || null;
+      if (dateTimeRaw) {
+        const dt = new Date(dateTimeRaw);
+        if (!Number.isNaN(dt.getTime())) {
+          const iso = dt.toISOString();
+          transDate = iso.slice(0, 10).replace(/-/g, '');
+          transTime = iso.slice(11, 19).replace(/:/g, '');
+        }
+      }
+
+      // slip_datetime: full datetime จากสลิป (MySQL format)
+      let slipDatetime = null;
+      if (dateTimeRaw) {
+        const dt = new Date(dateTimeRaw);
+        if (!Number.isNaN(dt.getTime())) {
+          slipDatetime = dt.toISOString().slice(0, 19).replace('T', ' ');
+        }
+      }
+
+      // ===== Validation (ทำทั้ง success และ duplicate เพราะ 200501 ก็มี data) =====
+      if (slipSuccess || slipDuplicate) {
+        // 1) ตรวจชื่อบัญชีผู้รับ
+        const expectedReceiverName = toNonEmptyString(
+          await getRuntimeSetting(app, 'receiver_name', '')
+        ).toUpperCase();
+        const actualReceiverName = toNonEmptyString(
+          d?.receiver?.account?.name
+        ).toUpperCase();
+        if (expectedReceiverName && actualReceiverName
+            && !actualReceiverName.includes(expectedReceiverName)
+            && !expectedReceiverName.includes(actualReceiverName)) {
+          console.warn('[slip-check] receiver name mismatch:',
+            { expected: expectedReceiverName, actual: actualReceiverName });
+          return res.status(400).json({
+            ok: false,
+            code: 'RECEIVER_NAME_MISMATCH',
+            message: 'ชื่อบัญชีผู้รับไม่ตรง กรุณาติดต่อเจ้าหน้าที่',
+            expectedName: expectedReceiverName,
+            actualName: actualReceiverName,
+          });
+        }
+
+        // 2) ตรวจจำนวนเงินตรงกับ payment_intents (ถ้าระบุ intentId)
         if (intentId) {
           const [rows] = await pool.query(
-            'SELECT id, amount FROM payment_intents WHERE id = $1 LIMIT 1',
+            `SELECT id, installment_id, payment_id, house_number, amount, method, status, qr_id,
+                    TIMESTAMPDIFF(SECOND, updated_at, NOW()) AS age_seconds
+             FROM payment_intents
+             WHERE id = ?
+             LIMIT 1`,
             [intentId]
           );
           const intent = Array.isArray(rows) && rows[0] ? rows[0] : null;
@@ -161,6 +628,27 @@ function registerSlipOkRoutes(app) {
               message: 'ไม่พบรายการชำระ กรุณาติดต่อเจ้าหน้าที่',
             });
           }
+
+          const ageSeconds = Number(intent.age_seconds || 0);
+          const isExpired = String(intent.status || '').toLowerCase() === 'expired'
+            || !Number.isFinite(ageSeconds)
+            || ageSeconds > QR_EXPIRY_MINUTES * 60;
+          if (isExpired) {
+            await pool.query(
+              `UPDATE payment_intents
+               SET status = 'expired', updated_at = NOW()
+               WHERE id = ?`,
+              [intentId]
+            ).catch(() => {});
+            return res.status(410).json({
+              ok: false,
+              code: 'INTENT_EXPIRED',
+              message: `QR นี้หมดอายุแล้ว กรุณาสร้างใหม่ (ภายใน ${QR_EXPIRY_MINUTES} นาที)`,
+            });
+          }
+
+          intentForCleanup = intent;
+
           if (amount != null && Number(amount).toFixed(2) !== Number(intent.amount).toFixed(2)) {
             return res.status(400).json({
               ok: false,
@@ -172,9 +660,15 @@ function registerSlipOkRoutes(app) {
           }
         }
 
-        // 2) ตรวจเลขปลายทาง PromptPay จากสลิป (4 ตัวท้าย)
-        const ppLast4 = String(PROMPTPAY_ID || '').replace(/\D/g, '').slice(-4);
-        const recvVal = String(d?.receiver?.proxy?.value || '');
+        // 3) ตรวจเลขปลายทาง PromptPay จากสลิป (4 ตัวท้าย)
+        const promptpayId = await getRuntimePromptPayId(app);
+        const ppLast4 = promptpayId.slice(-4);
+        const recvVal = String(
+          d?.receiver?.account?.proxy?.account
+          || d?.receiver?.account?.bank?.account
+          || d?.receiver?.proxy?.value
+          || ''
+        );
         const recvDigits = recvVal.replace(/\D/g, '');
         const recvLast4 = recvDigits.slice(-4);
         if (ppLast4 && recvLast4 && recvLast4 !== ppLast4) {
@@ -194,6 +688,16 @@ function registerSlipOkRoutes(app) {
           });
         }
       }
+
+      // หากเป็นสลิปซ้ำ (ผ่าน validation แล้ว) → reject
+      if (slipDuplicate) {
+        return res.status(409).json({
+          ok: false,
+          code: 'SLIP_DUPLICATE',
+          message: 'สลิปซ้ำ กรุณาแจ้งเจ้าหน้าที่',
+          provider: payload,
+        });
+      }
       // ===== End Validation =====
 
       // เช็คซ้ำด้วย qrcodeData ก่อนบันทึก
@@ -202,7 +706,7 @@ function registerSlipOkRoutes(app) {
         try {
           const [dup] = await pool.query(
             `SELECT id, amount, sending_bank, trans_date, trans_time, created_at
-             FROM slipok_verifications WHERE qrcode_data = $1 LIMIT 1`,
+             FROM slipok_verifications WHERE qrcode_data = ? LIMIT 1`,
             [qrKey]
           );
           if (Array.isArray(dup) && dup.length > 0) {
@@ -214,7 +718,7 @@ function registerSlipOkRoutes(app) {
             });
           }
         } catch (e) {
-          console.warn('[slipok] duplicate check error:', e.message);
+          console.warn('[slip-check] duplicate check error:', e.message);
         }
       }
 
@@ -223,30 +727,95 @@ function registerSlipOkRoutes(app) {
       try {
         const [r] = await pool.query(
           `INSERT INTO slipok_verifications
-             (amount, qrcode_data, sending_bank, trans_date, trans_time, raw_json)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-          [amount, qrcodeData, sendingBank, transDate, transTime, JSON.stringify(payload)]
+             (amount, qrcode_data, sending_bank, sender_name, trans_date, trans_time, slip_datetime, paid_at, raw_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)`,
+          [amount, qrcodeData, sendingBank, senderName, transDate, transTime, slipDatetime, JSON.stringify(payload)]
         );
-        insertedId = r?.[0]?.id || null;
+        insertedId = r?.insertId || null;
       } catch (e) {
-        console.error('[slipok] insert db error:', e.message);
+        console.error('[slip-check] insert db error:', e.message);
+      }
+
+      if (intentId) {
+        await pool.query(
+          `UPDATE payment_intents
+           SET status = 'confirmed', qr_id = NULL, updated_at = NOW()
+           WHERE id = ?`,
+          [intentId]
+        ).catch(() => {});
+      }
+
+      const qrFilenameRaw =
+        (intentForCleanup && intentForCleanup.qr_id ? String(intentForCleanup.qr_id) : '') ||
+        String(req.body?.qrFilename || req.body?.qr_filename || '').trim();
+      const qrFilename = qrFilenameRaw ? path.basename(qrFilenameRaw) : '';
+      let qrFreed = false;
+      if (qrFilename) {
+        try {
+          await removeCachedQRByFilename(qrFilename);
+          qrFreed = true;
+        } catch (e) {
+          console.warn('[slip-check] qr cleanup failed:', e.message);
+        }
+      }
+
+      let receiptImage = null;
+      try {
+        const receiverName = await getRuntimeSetting(app, 'receiver_name', '');
+        const promptPayId = await getRuntimePromptPayId(app);
+        const refFromProvider =
+          d?.transRef
+          || d?.transRefId
+          || d?.transactionId
+          || d?.txnId
+          || qrcodeData
+          || insertedId
+          || Date.now();
+
+        receiptImage = await createBankSlipImage({
+          amount,
+          senderName,
+          sendingBank,
+          paidAt: slipDatetime || dateTimeRaw,
+          houseNumber: intentForCleanup?.house_number || req.body?.house_number || '',
+          receiverName,
+          promptPayId,
+          reference: refFromProvider,
+        });
+      } catch (e) {
+        console.warn('[slip-check] receipt image generation failed:', e.message);
       }
 
       return res.json({
         ok: true,
         message: 'อัปโหลด + ตรวจสลิป สำเร็จ',
-        file: {
-          original: { filename: req.file.filename, url: originalUrl },
-          compressed: { filename: compressedName, url: compressedUrl },
-        },
-        slipok: resp?.data || null,
-        saved: { id: insertedId, amount, qrcodeData, sendingBank, transDate, transTime },
+        file: req.file
+          ? {
+              original: { filename: req.file.filename, url: originalUrl },
+              compressed: { filename: compressedName, url: compressedUrl },
+            }
+          : null,
+        providerMode,
+        providerEndpoint: providerEndpoint || null,
+        slip2go: payload,
+        // Backward compatibility for existing mobile clients.
+        slipok: payload,
+        saved: { id: insertedId, amount, qrcodeData, sendingBank, senderName, slipDatetime, transDate, transTime },
+        receiptImage,
+        receipt: receiptImage,
+        qrCleanup: { filename: qrFilename || null, freed: qrFreed },
       });
     } catch (err) {
-      console.error('[slipok] upload-and-check error:', err.message);
+      console.error('[slip-check] upload-and-check error:', err.message);
       return res.status(500).json({ ok: false, message: 'เซิร์ฟเวอร์ผิดพลาด กรุณาลองใหม่อีกครั้ง' });
     }
   });
 }
 
-module.exports = { registerSlipOkRoutes, resolveSlipOkUrl };
+module.exports = {
+  registerSlipOkRoutes,
+  registerSlip2GoRoutes: registerSlipOkRoutes,
+  resolveSlipOkUrl: resolveSlip2GoUrl,
+  resolveSlip2GoUrl,
+  resolveSlip2GoBase64Url,
+};

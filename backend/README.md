@@ -11,7 +11,7 @@ Structure
 
 Key routes
 - Auth: /auth/register, /auth/login, /auth/me, /profile
-- SlipOK: POST /upload-and-check (upload + compress + SlipOK check)
+- Slip2Go: POST /upload-and-check (upload + compress + Slip2Go check)
 - PromptPay: GET /promptpay-qr, GET /promptpay-qr/user/:userId
 - Payments:
   - GET /payments/status?year=YYYY&month=1-12&q=123
@@ -35,8 +35,12 @@ DB_NAME=mydb
 JWT_SECRET=supersecret
 JWT_EXPIRES=7d
 ADMIN_KEY=your-admin-key
-SLIPOK_API=https://api.slipok.com/api/line/verify
-SLIPOK_KEY=your-slipok-token
+SLIP2GO_API=https://api.slip2go.com
+SLIP2GO_SECRET=your-slip2go-secret
+
+# Backward compatibility (optional)
+SLIPOK_API=
+SLIPOK_KEY=
 PROMPTPAY_ID=0812345678
 PROMPTPAY_DEFAULT_AMOUNT=0
 QR_RETENTION_DAYS=3
@@ -45,6 +49,24 @@ PUPPETEER_HEADLESS=new
 Run
 - From project root: `npm run start --prefix backend`
 - Or `cd backend && npm start`
+
+Docker (Backend + MySQL)
+- From project root:
+  - `cd backend`
+  - `docker compose up --build -d`
+- Check logs:
+  - `docker compose logs -f backend`
+- API base URL:
+  - `http://localhost:5000`
+- Stop containers:
+  - `docker compose down`
+- Stop and remove MySQL volume data:
+  - `docker compose down -v`
+
+Notes for Docker
+- MySQL host for backend is `db` (service name), not `localhost`.
+- Host machine MySQL port is mapped to `3307`.
+- Edit `JWT_SECRET`, `ADMIN_KEY`, and database passwords in `docker-compose.yml` before exposing outside local development.
 
 Notes
 - Static files are served from: /uploads, /qrs, /pdfs

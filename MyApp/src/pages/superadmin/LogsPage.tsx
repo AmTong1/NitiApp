@@ -3,9 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator
 } from 'react-native';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrl } from '../SuperAdmin';
+import { formatThaiDateTime, toSortableMs } from '../../lib/datetime';
 
 
 const themeColors = {
@@ -40,18 +42,6 @@ interface LogsPageProps {
   onBack: () => void;
   darkMode?: boolean;
 }
-
-const formatDate = (dateString: string) => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  return d.toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 const LogsPage: React.FC<LogsPageProps> = ({ onBack }) => {
   const [deleteLogs, setDeleteLogs] = useState<DeleteLog[]>([]);
@@ -106,8 +96,8 @@ const LogsPage: React.FC<LogsPageProps> = ({ onBack }) => {
     
     // Sort
     logs.sort((a, b) => {
-      const dateA = new Date(a.deleted_at).getTime();
-      const dateB = new Date(b.deleted_at).getTime();
+      const dateA = toSortableMs(a.deleted_at);
+      const dateB = toSortableMs(b.deleted_at);
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
     
@@ -120,7 +110,7 @@ const LogsPage: React.FC<LogsPageProps> = ({ onBack }) => {
         <View style={styles.logIdBadge}>
           <Text style={styles.logIdText}>#{item.repair_id}</Text>
         </View>
-        <Text style={[styles.logDate, { color: colors.subtext }]}>{formatDate(item.deleted_at)}</Text>
+        <Text style={[styles.logDate, { color: colors.subtext }]}>{formatThaiDateTime(item.deleted_at)}</Text>
       </View>
       
       <Text style={[styles.logTitle, { color: colors.text }]}>{item.repair_title}</Text>
@@ -251,15 +241,15 @@ const styles = StyleSheet.create({
    header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: wp('4%'),
     borderBottomWidth: 1,
-    gap: 16,
+    gap: wp('4%'),
   },
   backBtn: {
-    padding: 4,
+    padding: wp('1%'),
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: wp('5%'),
     fontWeight: '700',
   },
   loadingContainer: {
@@ -268,140 +258,140 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 100,
+    padding: wp('4%'),
+    paddingBottom: hp('12.5%'),
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 100,
+    paddingTop: hp('12.5%'),
   },
   emptyText: {
-    fontSize: 16,
-    marginTop: 12,
+    fontSize: wp('4%'),
+    marginTop: hp('1.5%'),
   },
   logCard: {
-    borderRadius: 12,
+    borderRadius: wp('3%'),
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 12,
+    padding: wp('4%'),
+    marginBottom: hp('1.5%'),
   },
   logHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: hp('1%'),
   },
   logIdBadge: {
     backgroundColor: '#EF4444',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: wp('2.5%'),
+    paddingVertical: hp('0.5%'),
+    borderRadius: wp('3%'),
   },
   logIdText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: wp('3%'),
     fontWeight: '700',
   },
   logDate: {
-    fontSize: 12,
+    fontSize: wp('3%'),
   },
   logTitle: {
-    fontSize: 16,
+    fontSize: wp('4%'),
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: hp('1%'),
   },
   logInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: wp('1.5%'),
+    marginBottom: hp('0.5%'),
   },
   logInfoText: {
-    fontSize: 13,
+    fontSize: wp('3.2%'),
   },
   deletedByBox: {
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 8,
+    padding: wp('2.5%'),
+    borderRadius: wp('2%'),
+    marginTop: hp('1%'),
   },
   roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
+    paddingHorizontal: wp('2%'),
+    paddingVertical: hp('0.25%'),
+    borderRadius: wp('2.5%'),
+    marginLeft: wp('2%'),
   },
   roleBadgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: wp('2.7%'),
     fontWeight: '600',
   },
   reasonBox: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: hp('1.5%'),
+    paddingTop: hp('1.5%'),
     borderTopWidth: 1,
   },
   reasonLabel: {
-    fontSize: 12,
+    fontSize: wp('3%'),
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: hp('0.5%'),
   },
   reasonText: {
-    fontSize: 14,
+    fontSize: wp('3.5%'),
   },
   // Search
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.7%'),
     borderBottomWidth: 1,
-    gap: 12,
+    gap: hp('1.5%'),
   },
   searchInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    borderRadius: wp('3%'),
+    paddingHorizontal: wp('3.5%'),
+    paddingVertical: hp('1.3%'),
+    gap: wp('2.5%'),
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: wp('3.7%'),
     paddingVertical: 0,
   },
   sortButtons: {
     flexDirection: 'row',
-    gap: 10,
+    gap: wp('2.5%'),
   },
   sortBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: wp('3.5%'),
+    paddingVertical: hp('1%'),
+    borderRadius: wp('5%'),
     borderWidth: 1,
-    gap: 5,
+    gap: wp('1.3%'),
   },
   sortBtnText: {
-    fontSize: 13,
+    fontSize: wp('3.2%'),
     fontWeight: '600',
   },
   resultCount: {
-    fontSize: 13,
+    fontSize: wp('3.2%'),
     fontWeight: '500',
   },
   deletedByLabel: {
-    fontSize: 12,
+    fontSize: wp('3%'),
   },
   deletedByRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: hp('0.5%'),
   },
   deletedByName: {
-    marginLeft: 6,
+    marginLeft: wp('1.5%'),
     fontWeight: '600',
   },
   roleBadgeWarning: {

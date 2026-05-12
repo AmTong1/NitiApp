@@ -7,12 +7,12 @@ const { hasDb, columnExists } = require('../utils/db');
 async function ensureResidentLogsTable() {
   if (!(await hasDb())) return false;
   await pool.query(`CREATE TABLE IF NOT EXISTS resident_logs (
-    id BIGSERIAL PRIMARY KEY,
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     action VARCHAR(32) NOT NULL,
     resident_id BIGINT NULL,
     house_number VARCHAR(32) NULL,
     resident_name VARCHAR(255) NULL,
-    changes JSONB NULL,
+    changes JSON NULL,
     performed_by BIGINT NULL,
     performed_by_name VARCHAR(255) NULL,
     performed_by_role VARCHAR(32) NULL,
@@ -29,7 +29,7 @@ async function insertResidentLog(action, { residentId, houseNumber, residentName
     const performedByRole = user?.role || null;
     await pool.query(
       `INSERT INTO resident_logs (action, resident_id, house_number, resident_name, changes, performed_by, performed_by_name, performed_by_role)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [action, residentId || null, houseNumber || null, residentName || null,
        changes ? JSON.stringify(changes) : null, performedBy, performedByName, performedByRole]
     );
@@ -46,10 +46,10 @@ let mockResidents = (global.mockResidents ?? [
 let mockSeq = mockResidents.length ? Math.max(...mockResidents.map(r => r.id)) : 0;
 global.mockResidents = mockResidents;
 
-// เช็กว่ามี index อยู่หรือยัง - PostgreSQL version
+// เช็กว่ามี index อยู่หรือยัง
 async function indexExists(table, indexName) {
   const [rows] = await pool.query(
-    `SELECT COUNT(1) AS c FROM pg_indexes WHERE tablename = $1 AND indexname = $2`,
+    `SELECT COUNT(1) AS c FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
     [table, indexName]
   );
   return (Number(rows?.[0]?.c) || 0) > 0;
@@ -59,7 +59,7 @@ async function indexExists(table, indexName) {
 async function ensureResidentsTable() {
   if (!(await hasDb())) return false;
   await pool.query(`CREATE TABLE IF NOT EXISTS residents (
-    id SERIAL PRIMARY KEY,
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     house_number VARCHAR(32) NOT NULL,
     title VARCHAR(32) NULL,
     first_name VARCHAR(64) NOT NULL,
@@ -91,7 +91,7 @@ async function ensureHousesTable() {
   if (!(await hasDb())) return false;
   try {
     await pool.query(`CREATE TABLE IF NOT EXISTS houses (
-      id SERIAL PRIMARY KEY,
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
       house_number VARCHAR(32) NOT NULL UNIQUE,
       owner_name VARCHAR(128) NULL,
       area_sq_m DECIMAL(10,2) NULL,
@@ -108,7 +108,7 @@ async function ensureAccountsTable() {
   if (!(await hasDb())) return false;
   try {
     await pool.query(`CREATE TABLE IF NOT EXISTS accounts (
-      id BIGSERIAL PRIMARY KEY,
+      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(64) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
       full_name VARCHAR(255) NULL,
@@ -122,8 +122,7 @@ async function ensureAccountsTable() {
   }
 }
 
-// PostgreSQL: duplicate key error code is 23505
-function isDup(err) { return err?.code === '23505'; }
+function isDup(err) { return err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062; }
 function dupField(err) {
   const m = String(err?.detail || err?.message || '').toLowerCase();
   if (m.includes('house_number')) return 'house_number';
@@ -143,11 +142,10 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
     // sync houses table
     let area = areaProvided != null ? Number(areaProvided) : null;
     let houseId = null;
-    const hResult = await db.query(
-      'SELECT id, area_sq_m FROM houses WHERE house_number = $1 LIMIT 1',
+    const [hrows] = await db.query(
+      'SELECT id, area_sq_m FROM houses WHERE house_number = ? LIMIT 1',
       [String(houseNumber)]
     );
-    const hrows = hResult.rows || hResult[0];
     if (hrows && hrows[0]) {
       houseId = hrows[0].id ?? null;
       if (area == null && hrows[0].area_sq_m != null) area = Number(hrows[0].area_sq_m);
@@ -155,24 +153,22 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
 
     // ถ้ายังไม่มีบ้าน ให้สร้างจากข้อมูลใน residents
     if (!houseId) {
-      const rResult = await db.query(
-        'SELECT title, first_name, last_name, house_number FROM residents WHERE house_number = $1 LIMIT 1',
+      const [rrows] = await db.query(
+        'SELECT title, first_name, last_name, house_number FROM residents WHERE house_number = ? LIMIT 1',
         [String(houseNumber)]
       );
-      const rrows = rResult.rows || rResult[0];
       const r = rrows?.[0];
       const ownerName = r ? [r.title, r.first_name, r.last_name].filter(Boolean).join(' ').trim() || null : null;
       await db.query(
         `INSERT INTO houses (house_number, owner_name, area_sq_m)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (house_number) DO UPDATE SET
-           owner_name = COALESCE(EXCLUDED.owner_name, houses.owner_name),
-           area_sq_m = COALESCE(EXCLUDED.area_sq_m, houses.area_sq_m)`,
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           owner_name = COALESCE(VALUES(owner_name), owner_name),
+           area_sq_m = COALESCE(VALUES(area_sq_m), area_sq_m)`,
         [String(houseNumber), ownerName, Number.isFinite(area) ? area : null]
       );
       // ดึง id อีกรอบ
-      const againResult = await db.query('SELECT id, area_sq_m FROM houses WHERE house_number = $1 LIMIT 1', [String(houseNumber)]);
-      const again = againResult.rows || againResult[0];
+      const [again] = await db.query('SELECT id, area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [String(houseNumber)]);
       if (again && again[0]) {
         houseId = again[0].id ?? null;
         if (area == null && again[0].area_sq_m != null) area = Number(again[0].area_sq_m);
@@ -184,9 +180,7 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
   // Get rate from settings or default 10
   let rate = 10;
   try {
-    const resOrRows = await db.query("SELECT value FROM system_settings WHERE key = 'rate_per_sqm'");
-    // Handle both pool wrapper ([rows]) and pg client ({rows})
-    const rows = Array.isArray(resOrRows) ? resOrRows[0] : (resOrRows.rows || []);
+    const [rows] = await db.query("SELECT value FROM system_settings WHERE `key` = ?", ['rate_per_sqm']);
     if (rows && rows.length > 0) {
       const val = rows[0].value;
       if (val && !isNaN(val)) rate = Number(val);
@@ -198,10 +192,12 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
     const total = perMonth * monthsNum;
 
     // ตรวจคอลัมน์ที่มีจริงใน payments
-    const colsResult = await db.query(
-      `SELECT column_name FROM information_schema.columns WHERE table_catalog = current_database() AND table_name = 'payments'`
+    const [colsRows] = await db.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = 'payments'`
     );
-    const colsRows = colsResult.rows || colsResult[0] || [];
     const colSet = new Set((colsRows || []).map(r => String(r.column_name).toLowerCase()));
 
     const cols = [];
@@ -224,7 +220,7 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
     if (colSet.has('note')) { cols.push('note'); vals.push('Initial payment'); }
 
     if (!cols.length) return;
-    const ph = cols.map((_, i) => `$${i + 1}`).join(', ');
+    const ph = cols.map(() => '?').join(', ');
 
     console.log(`[payments] insert: house=${houseNumber}, house_id=${houseId}, area=${area}, months=${monthsNum}, per=${perMonth}, total=${total}`);
     await db.query(`INSERT INTO payments (${cols.join(', ')}) VALUES (${ph})`, vals);
@@ -233,22 +229,37 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
   }
 }
 
-// ฟังก์ชัน upsertPayment - PostgreSQL version
-async function upsertPayment(db, { houseNumber, months, areaProvided }) {
+// ฟังก์ชัน upsertPayment
+async function upsertPayment(db, { houseNumber, months, areaProvided, restartCycle = false }) {
   const m = Number(months);
   if (!Number.isInteger(m) || m < 0) return;
   let area = areaProvided != null ? Number(areaProvided) : null;
+  let houseId = null;
   if (!Number.isFinite(area)) {
-    const hResult = await db.query('SELECT area_sq_m FROM houses WHERE house_number = $1 LIMIT 1', [String(houseNumber)]);
-    const h = hResult.rows || hResult[0];
+    const [h] = await db.query('SELECT id, area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [String(houseNumber)]);
+    if (h?.[0]?.id != null) houseId = Number(h[0].id);
     if (h?.[0]?.area_sq_m != null) area = Number(h[0].area_sq_m);
+  } else {
+    const [h] = await db.query('SELECT id FROM houses WHERE house_number = ? LIMIT 1', [String(houseNumber)]);
+    if (h?.[0]?.id != null) houseId = Number(h[0].id);
+  }
+
+  if (!houseId) {
+    await db.query(
+      `INSERT INTO houses (house_number, area_sq_m)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE area_sq_m = COALESCE(VALUES(area_sq_m), area_sq_m)`,
+      [String(houseNumber), Number.isFinite(area) ? area : null]
+    );
+    const [h2] = await db.query('SELECT id, area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [String(houseNumber)]);
+    if (h2?.[0]?.id != null) houseId = Number(h2[0].id);
+    if (!Number.isFinite(area) && h2?.[0]?.area_sq_m != null) area = Number(h2[0].area_sq_m);
   }
   if (!Number.isFinite(area)) return;
   // Get rate from settings or default 10
   let rate = 10;
   try {
-    const resOrRows = await db.query("SELECT value FROM system_settings WHERE key = 'rate_per_sqm'");
-    const rows = Array.isArray(resOrRows) ? resOrRows[0] : (resOrRows.rows || []);
+    const [rows] = await db.query("SELECT value FROM system_settings WHERE `key` = ?", ['rate_per_sqm']);
     if (rows && rows.length > 0) {
       const val = rows[0].value;
       if (val && !isNaN(val)) rate = Number(val);
@@ -258,62 +269,70 @@ async function upsertPayment(db, { houseNumber, months, areaProvided }) {
   const per = area * rate;
   const total = per * m;
 
-  const existResult = await db.query('SELECT id, created_at FROM payments WHERE house_number = $1 LIMIT 1', [String(houseNumber)]);
-  const existRows = existResult.rows || existResult[0];
+  const [existRows] = await db.query(
+    'SELECT id, created_at, months FROM payments WHERE house_number = ? ORDER BY created_at DESC, id DESC LIMIT 1',
+    [String(houseNumber)]
+  );
   if (existRows[0]) {
-    // PostgreSQL: use INTERVAL and EXTRACT instead of DATE_ADD/TIMESTAMPDIFF
+    const currentMonths = Number(existRows[0].months || 0);
+    const shouldRestartCycle = !!restartCycle || currentMonths !== m;
+
+    // Always preserve created_at to avoid shifting historical offsets for payment installments.
     await db.query(
       `UPDATE payments
-         SET area_sq_m = $1,
-             rate_per_sqm = $2,
-             months = $3,
-             amount_per_month = $4,
-             total_amount = $5,
+         SET house_id = COALESCE(?, house_id),
+             area_sq_m = ?,
+             rate_per_sqm = ?,
+             months = ?,
+             amount_per_month = ?,
+             total_amount = ?,
              note = 'Current',
-             cover_until = created_at + ($6 || ' months')::INTERVAL,
-             pay_status = (CASE
-               WHEN $7 > 0 AND (created_at + ($8 || ' months')::INTERVAL) > NOW() THEN 'paid'
-               WHEN $9 > 0 THEN 'pending'
+             cover_until = created_at + INTERVAL ? MONTH,
+             pay_status = CASE
+               WHEN ? > 0 AND (created_at + INTERVAL ? MONTH) > NOW() THEN 'paid'
+               WHEN ? > 0 THEN 'pending'
                ELSE 'overdue'
-             END)::pay_status_type,
+             END,
              remaining_days = CASE
-               WHEN $10 > 0 AND (created_at + ($11 || ' months')::INTERVAL) > NOW()
-                 THEN GREATEST(0, EXTRACT(DAY FROM ((created_at + ($12 || ' months')::INTERVAL) - NOW())))::INT
+               WHEN ? > 0 AND (created_at + INTERVAL ? MONTH) > NOW()
+                 THEN GREATEST(0, DATEDIFF(created_at + INTERVAL ? MONTH, NOW()))
                ELSE 0
              END
-       WHERE house_number = $13`,
-      [area, rate, m, per, total,
+       WHERE id = ?`,
+      [houseId || null, area, rate, m, per, total,
        m,
        m, m,
        m,
-       m, m, m,
-       String(houseNumber)]
+       m, m,
+       m,
+       Number(existRows[0].id)]
     );
   } else {
     await db.query(
       `INSERT INTO payments
-        (house_number, area_sq_m, rate_per_sqm, months, amount_per_month, total_amount, note,
+        (house_id, house_number, area_sq_m, rate_per_sqm, months, amount_per_month, total_amount, note,
          cover_until, pay_status, remaining_days)
-       VALUES ($1, $2, $3, $4, $5, $6, 'Current',
-         NOW() + ($7 || ' months')::INTERVAL,
-         (CASE WHEN $8 > 0 THEN 'paid' ELSE 'overdue' END)::pay_status_type,
-         CASE WHEN $9 > 0 THEN GREATEST(0, EXTRACT(DAY FROM ((NOW() + ($10 || ' months')::INTERVAL) - NOW())))::INT ELSE 0 END
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'Current',
+         NOW() + INTERVAL ? MONTH,
+         CASE WHEN ? > 0 THEN 'paid' ELSE 'overdue' END,
+         CASE WHEN ? > 0 THEN GREATEST(0, DATEDIFF(NOW() + INTERVAL ? MONTH, NOW())) ELSE 0 END
        )
-       ON CONFLICT (house_number) DO UPDATE SET
-         area_sq_m = EXCLUDED.area_sq_m,
-         rate_per_sqm = EXCLUDED.rate_per_sqm,
-         months = EXCLUDED.months,
-         amount_per_month = EXCLUDED.amount_per_month,
-         total_amount = EXCLUDED.total_amount,
+       ON DUPLICATE KEY UPDATE
+         house_id = COALESCE(VALUES(house_id), house_id),
+         area_sq_m = VALUES(area_sq_m),
+         rate_per_sqm = VALUES(rate_per_sqm),
+         months = VALUES(months),
+         amount_per_month = VALUES(amount_per_month),
+         total_amount = VALUES(total_amount),
          note = 'Current',
-         cover_until = EXCLUDED.cover_until,
-         pay_status = EXCLUDED.pay_status,
+         cover_until = VALUES(cover_until),
+         pay_status = VALUES(pay_status),
          remaining_days = CASE
-           WHEN EXCLUDED.months > 0 AND EXCLUDED.cover_until > NOW()
-             THEN GREATEST(0, EXTRACT(DAY FROM (EXCLUDED.cover_until - NOW())))::INT
+           WHEN VALUES(months) > 0 AND VALUES(cover_until) > NOW()
+             THEN GREATEST(0, DATEDIFF(VALUES(cover_until), NOW()))
            ELSE 0
          END`,
-      [String(houseNumber), area, rate, m, per, total,
+      [houseId || null, String(houseNumber), area, rate, m, per, total,
        m,
        m,
        m, m]
@@ -323,26 +342,26 @@ async function upsertPayment(db, { houseNumber, months, areaProvided }) {
   // หลังอัปเดต ถ้า cover_until ผ่านไปแล้วให้ปรับเป็น pending
   await db.query(
     `UPDATE payments
-       SET pay_status = (CASE
+       SET pay_status = CASE
              WHEN months > 0 AND cover_until > NOW() THEN 'paid'
              WHEN months > 0 THEN 'pending'
              ELSE 'overdue'
-           END)::pay_status_type,
+           END,
            remaining_days = CASE
              WHEN months > 0 AND cover_until > NOW()
-               THEN GREATEST(0, EXTRACT(DAY FROM (cover_until - NOW())))::INT
+               THEN GREATEST(0, DATEDIFF(cover_until, NOW()))
              ELSE 0
            END
-     WHERE house_number = $1`,
+     WHERE house_number = ?`,
     [String(houseNumber)]
   );
 }
 
-// ปรับ ensurePaymentsTable - PostgreSQL version
+// ปรับ ensurePaymentsTable
 async function ensurePaymentsTable() {
   if (!(await hasDb())) return false;
   await pool.query(`CREATE TABLE IF NOT EXISTS payments (
-    id SERIAL PRIMARY KEY,
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     house_number VARCHAR(32) NOT NULL UNIQUE,
     area_sq_m DECIMAL(10,2) NULL,
     rate_per_sqm DECIMAL(10,2) NOT NULL DEFAULT 10.00,
@@ -383,7 +402,7 @@ function registerResidentRoutes(app) {
            FROM residents r
            LEFT JOIN houses h ON h.house_number = r.house_number
            LEFT JOIN payments pay ON pay.house_number = r.house_number
-          WHERE r.account_id = $1
+          WHERE r.account_id = ?
           LIMIT 1`,
         [accountId]
       );
@@ -406,11 +425,11 @@ function registerResidentRoutes(app) {
         return res.status(400).json({ ok: false, error: 'INVALID_PHONE' });
       }
       // Find resident linked to account
-      const [rows] = await pool.query('SELECT id FROM residents WHERE account_id = $1 LIMIT 1', [accountId]);
+      const [rows] = await pool.query('SELECT id FROM residents WHERE account_id = ? LIMIT 1', [accountId]);
       const r = rows[0];
       if (!r) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
-      await pool.query('UPDATE residents SET phone = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [phone ? String(phone) : null, r.id]);
-      const [refetch] = await pool.query('SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, account_id FROM residents WHERE id = $1', [r.id]);
+      await pool.query('UPDATE residents SET phone = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [phone ? String(phone) : null, r.id]);
+      const [refetch] = await pool.query('SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, account_id FROM residents WHERE id = ?', [r.id]);
       return res.json({ ok: true, data: refetch[0] || null });
     } catch (e) {
       console.error('PUT /me/resident/phone error:', e);
@@ -427,15 +446,15 @@ function registerResidentRoutes(app) {
 
         const where = [];
         const params = [];
-        let paramIdx = 1;
         if (q) {
-          where.push(`(r.house_number LIKE $${paramIdx} OR r.first_name LIKE $${paramIdx + 1} OR r.last_name LIKE $${paramIdx + 2} OR r.phone LIKE $${paramIdx + 3} OR r.title LIKE $${paramIdx + 4})`);
+          where.push('(r.house_number LIKE ? OR r.first_name LIKE ? OR r.last_name LIKE ? OR r.phone LIKE ? OR r.title LIKE ?)');
           params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
-          paramIdx += 5;
         }
+        // Keep one row per house_number in MySQL
+        where.push('r.id = (SELECT r2.id FROM residents r2 WHERE r2.house_number = r.house_number ORDER BY r2.id DESC LIMIT 1)');
         const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
         const [rows] = await pool.query(
-          `SELECT DISTINCT ON (r.house_number) r.id, r.house_number, r.title, r.first_name, r.last_name, r.phone,
+          `SELECT r.id, r.house_number, r.title, r.first_name, r.last_name, r.phone,
                   r.household_count, r.car_count, r.pay_months,
                   h.area_sq_m,
                   ${COVERAGE_COLUMNS}
@@ -470,15 +489,15 @@ function registerResidentRoutes(app) {
         const monthsVal = normalizeMonths(pay_months);
         await pool.query(
           `INSERT INTO residents (house_number, title, first_name, last_name, phone, household_count, car_count, pay_months)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [house_number, title ?? null, first_name, last_name ?? null, phoneDigits, Number(household_count ?? 1), Number(car_count ?? 0), monthsVal]
         );
         // sync houses table
         const ownerName = [title, first_name, last_name].filter(Boolean).join(' ').trim() || null;
         await pool.query(
           `INSERT INTO houses (house_number, owner_name, area_sq_m)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (house_number) DO UPDATE SET owner_name = EXCLUDED.owner_name, area_sq_m = COALESCE(EXCLUDED.area_sq_m, houses.area_sq_m)`,
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE owner_name = VALUES(owner_name), area_sq_m = COALESCE(VALUES(area_sq_m), houses.area_sq_m)`,
           [String(house_number), ownerName, area_sq_m != null ? Number(area_sq_m) : null]
         );
 
@@ -495,7 +514,7 @@ function registerResidentRoutes(app) {
              FROM residents r
              LEFT JOIN houses h ON h.house_number = r.house_number
              LEFT JOIN payments pay ON pay.house_number = r.house_number
-           WHERE r.house_number = $1 ORDER BY r.id DESC LIMIT 1`,
+           WHERE r.house_number = ? ORDER BY r.id DESC LIMIT 1`,
           [house_number]
         );
 
@@ -560,11 +579,11 @@ function registerResidentRoutes(app) {
       // accounts
       let accId;
       try {
-        const accResult = await client.query(
-          `INSERT INTO accounts (username, password_hash, role) VALUES ($1, $2, 'user') RETURNING id`,
+        const [accResult] = await client.query(
+          `INSERT INTO accounts (username, password_hash, role) VALUES (?, ?, 'user')`,
           [String(username).trim(), await bcrypt.hash(String(password), 10)]
         );
-        accId = accResult.rows[0]?.id;
+        accId = accResult.insertId;
       } catch (e) {
         if (isDup(e)) { await client.query('ROLLBACK'); client.release(); return res.status(409).json({ ok: false, error: 'DUPLICATE_USERNAME', field: 'username' }); }
         throw e;
@@ -574,7 +593,7 @@ function registerResidentRoutes(app) {
       await client.query(
         `INSERT INTO residents
            (house_number, title, first_name, last_name, phone, household_count, car_count, pay_months, account_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           house_number, title ?? null, first_name, last_name ?? null,
           String(phone || '').replace(/\D/g, '') || null,
@@ -592,10 +611,10 @@ function registerResidentRoutes(app) {
         .join(' ') || null;
       await client.query(
         `INSERT INTO houses (house_number, owner_name, area_sq_m)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (house_number) DO UPDATE SET
-           owner_name = COALESCE(EXCLUDED.owner_name, houses.owner_name),
-           area_sq_m = COALESCE(EXCLUDED.area_sq_m, houses.area_sq_m)`,
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           owner_name = COALESCE(VALUES(owner_name), owner_name),
+           area_sq_m = COALESCE(VALUES(area_sq_m), area_sq_m)`,
         [String(house_number), ownerName, area_sq_m != null ? Number(area_sq_m) : null]
       );
       
@@ -604,8 +623,7 @@ function registerResidentRoutes(app) {
       // Note: upsertPayment needs wrapper for client
       const clientWrapper = {
         async query(text, values) {
-          const result = await client.query(text, values);
-          return [result.rows, result.fields];
+          return client.query(text, values);
         }
       };
       await upsertPayment(clientWrapper, { houseNumber: house_number, months: monthsVal, areaProvided: area_sq_m });
@@ -618,7 +636,7 @@ function registerResidentRoutes(app) {
            FROM residents r
            LEFT JOIN houses h ON h.house_number = r.house_number
            LEFT JOIN payments pay ON pay.house_number = r.house_number
-          WHERE r.house_number = $1 ORDER BY r.id DESC LIMIT 1`,
+          WHERE r.house_number = ? ORDER BY r.id DESC LIMIT 1`,
         [house_number]
       );
 
@@ -665,7 +683,7 @@ function registerResidentRoutes(app) {
 
       // ดึงข้อมูลเดิม
       const [oldRows] = await pool.query(
-        'SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = $1 LIMIT 1',
+        'SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = ? LIMIT 1',
         [id]
       );
       const old = oldRows[0];
@@ -674,7 +692,7 @@ function registerResidentRoutes(app) {
       // ดึง area_sq_m เดิมจาก houses
       let oldAreaSqM = null;
       try {
-        const [hRows] = await pool.query('SELECT area_sq_m FROM houses WHERE house_number = $1 LIMIT 1', [old.house_number]);
+        const [hRows] = await pool.query('SELECT area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [old.house_number]);
         if (hRows[0]?.area_sq_m != null) oldAreaSqM = Number(hRows[0].area_sq_m);
       } catch {}
       old.area_sq_m = oldAreaSqM;
@@ -682,33 +700,32 @@ function registerResidentRoutes(app) {
       const phoneDigits = phone === undefined ? undefined : (String(phone || '').replace(/\D/g, '') || null);
       const fields = [];
       const params = [];
-      let paramIdx = 1;
-      if (house_number !== undefined) { fields.push(`house_number = $${paramIdx++}`); params.push(String(house_number)); }
-      if (title !== undefined) { fields.push(`title = $${paramIdx++}`); params.push(title ?? null); }
-      if (first_name !== undefined) { fields.push(`first_name = $${paramIdx++}`); params.push(first_name || old.first_name); }
-      if (last_name !== undefined) { fields.push(`last_name = $${paramIdx++}`); params.push(last_name ?? null); }
-      if (phoneDigits !== undefined) { fields.push(`phone = $${paramIdx++}`); params.push(phoneDigits); }
-      if (household_count !== undefined) { fields.push(`household_count = $${paramIdx++}`); params.push(Number(household_count || 0) || 0); }
-      if (car_count !== undefined) { fields.push(`car_count = $${paramIdx++}`); params.push(Number(car_count || 0) || 0); }
+      if (house_number !== undefined) { fields.push('house_number = ?'); params.push(String(house_number)); }
+      if (title !== undefined) { fields.push('title = ?'); params.push(title ?? null); }
+      if (first_name !== undefined) { fields.push('first_name = ?'); params.push(first_name || old.first_name); }
+      if (last_name !== undefined) { fields.push('last_name = ?'); params.push(last_name ?? null); }
+      if (phoneDigits !== undefined) { fields.push('phone = ?'); params.push(phoneDigits); }
+      if (household_count !== undefined) { fields.push('household_count = ?'); params.push(Number(household_count || 0) || 0); }
+      if (car_count !== undefined) { fields.push('car_count = ?'); params.push(Number(car_count || 0) || 0); }
       if (pay_months !== undefined) {
         const n = Number(pay_months);
-        fields.push(`pay_months = $${paramIdx++}`);
+        fields.push('pay_months = ?');
         params.push(Number.isInteger(n) && n > 0 ? n : null);
       }
       if (fields.length === 0) return res.json({ ok: true, data: old });
 
       fields.push(`updated_at = CURRENT_TIMESTAMP`);
       params.push(id);
-      await pool.query(`UPDATE residents SET ${fields.join(', ')} WHERE id = $${paramIdx}`, params);
+      await pool.query(`UPDATE residents SET ${fields.join(', ')} WHERE id = ?`, params);
 
       // อัปเดต / สร้างข้อมูลบ้าน (area ถ้าส่งมา)
       if (area_sq_m !== undefined || house_number !== undefined) {
         const hn = house_number !== undefined ? String(house_number) : String(old.house_number);
         await pool.query(
           `INSERT INTO houses (house_number, owner_name, area_sq_m)
-           VALUES ($1, NULL, $2)
-           ON CONFLICT (house_number) DO UPDATE SET
-             area_sq_m = COALESCE(EXCLUDED.area_sq_m, houses.area_sq_m)`,
+           VALUES (?, NULL, ?)
+           ON DUPLICATE KEY UPDATE
+             area_sq_m = COALESCE(VALUES(area_sq_m), houses.area_sq_m)`,
           [hn, area_sq_m != null ? Number(area_sq_m) : null]
         );
       }
@@ -718,10 +735,12 @@ function registerResidentRoutes(app) {
         try {
           await ensurePaymentsTable();
           const newValNum = normalizeMonths(pay_months) ?? 0;
+          const oldValNum = normalizeMonths(old.pay_months) ?? 0;
           await upsertPayment(pool, {
             houseNumber: (house_number !== undefined ? house_number : old.house_number),
             months: newValNum,
-            areaProvided: area_sq_m
+            areaProvided: area_sq_m,
+            restartCycle: newValNum !== oldValNum,
           });
         } catch (e) {
           console.warn('update resident upsertPayment error:', e.message);
@@ -735,7 +754,7 @@ function registerResidentRoutes(app) {
            FROM residents r
            LEFT JOIN houses h ON h.house_number = r.house_number
           LEFT JOIN payments pay ON pay.house_number = r.house_number
-          WHERE r.id = $1 LIMIT 1`,
+          WHERE r.id = ? LIMIT 1`,
         [id]
       );
 
@@ -784,17 +803,17 @@ function registerResidentRoutes(app) {
     if (await ensureResidentsTable()) {
       try {
         await ensureHousesTable();
-        const [rows] = await pool.query('SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = $1 LIMIT 1', [id]);
+        const [rows] = await pool.query('SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = ? LIMIT 1', [id]);
         const deleted = rows[0];
         const hn = deleted?.house_number ? String(deleted.house_number) : null;
 
         const client = await pool.getClient();
         try {
           await client.query('BEGIN');
-          await client.query('DELETE FROM residents WHERE id = $1', [id]);
+          await client.query('DELETE FROM residents WHERE id = ?', [id]);
           if (hn) {
             // Delete house; payments has FK ON DELETE CASCADE
-            await client.query('DELETE FROM houses WHERE house_number = $1', [hn]);
+            await client.query('DELETE FROM houses WHERE house_number = ?', [hn]);
           }
           await client.query('COMMIT');
         } catch (e) {
@@ -858,7 +877,7 @@ function registerResidentRoutes(app) {
       const hn = String(req.params.houseNumber).trim();
       if (!hn) return res.status(400).json({ ok: false, error: 'INVALID_HOUSE_NUMBER' });
       const [rows] = await pool.query(
-        `SELECT house_number FROM houses WHERE house_number = $1 LIMIT 1`,
+        `SELECT house_number FROM houses WHERE house_number = ? LIMIT 1`,
         [hn]
       );
       const exists = rows.length > 0;
@@ -881,22 +900,30 @@ function registerResidentRoutes(app) {
       const offset = Math.max(parseInt(req.query.offset) || 0, 0);
       const where = [];
       const params = [];
-      let idx = 1;
 
       if (q) {
-        where.push(`(rl.house_number LIKE $${idx} OR rl.resident_name LIKE $${idx + 1} OR rl.performed_by_name LIKE $${idx + 2})`);
+        where.push('(rl.house_number LIKE ? OR rl.resident_name LIKE ? OR rl.performed_by_name LIKE ?)');
         params.push(`%${q}%`, `%${q}%`, `%${q}%`);
-        idx += 3;
       }
       if (action) {
-        where.push(`rl.action = $${idx}`);
+        where.push('rl.action = ?');
         params.push(action);
-        idx++;
       }
       const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
       const [rows] = await pool.query(
-        `SELECT rl.* FROM resident_logs rl ${whereSql} ORDER BY rl.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+        `SELECT
+           rl.id,
+           rl.action,
+           rl.resident_id,
+           rl.house_number,
+           rl.resident_name,
+           rl.changes,
+           rl.performed_by,
+           rl.performed_by_name,
+           rl.performed_by_role,
+           DATE_FORMAT(rl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+         FROM resident_logs rl ${whereSql} ORDER BY rl.created_at DESC LIMIT ? OFFSET ?`,
         [...params, limit + 1, offset]
       );
       const hasMore = rows.length > limit;
