@@ -15,6 +15,7 @@ const { registerPaymentRoutes } = require('./routes/payments');
 const { registerResidentRoutes } = require('./routes/residents');
 const { registerSettingsRoutes } = require('./routes/settings');
 const { registerFinancialRoutes } = require('./routes/financial');
+const { registerDiscountRoutes } = require('./routes/discount');
 
 const STATIC_MEDIA_PREFIX_RE = /^\/(uploads|qrs|pdfs)\//i;
 const MEDIA_EXT_RE = /\.(?:png|jpe?g|gif|webp|svg|bmp|ico|mp4|m4v|mov|webm|mkv|avi|3gp|mp3|wav|m4a|aac|ogg|pdf)(?:$|\?)/i;
@@ -304,6 +305,7 @@ function buildApp(io) {
   registerPaymentRoutes(app);
   registerResidentRoutes(app);
   registerFinancialRoutes(app);
+  registerDiscountRoutes(app);
 
   return app;
 }

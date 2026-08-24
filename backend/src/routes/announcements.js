@@ -316,7 +316,7 @@ function registerAnnouncementRoutes(app) {
            al.performed_by,
            al.performed_by_name,
            al.performed_by_role,
-           DATE_FORMAT(al.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+           al.created_at
          FROM announcement_logs al ${whereSql} ORDER BY al.created_at DESC LIMIT ? OFFSET ?`,
         [...params, limit + 1, offset]
       );

@@ -1,8 +1,34 @@
-# PROJ Monorepo
+# NitiSmart — ระบบบริหารจัดการนิติบุคคล
 
-โปรเจกต์นี้รวม 2 ส่วนหลัก:
-- `backend/` : Node.js + Express + Socket.IO API
-- `MyApp/` : React Native mobile app
+<div align="center">
+
+<img src="https://img.shields.io/badge/React_Native-0.80-61DAFB?style=for-the-badge&logo=react&logoColor=white" />
+<img src="https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" />
+<img src="https://img.shields.io/badge/Express-5.x-000000?style=for-the-badge&logo=express&logoColor=white" />
+<img src="https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white" />
+<img src="https://img.shields.io/badge/Socket.IO-4.x-010101?style=for-the-badge&logo=socketdotio&logoColor=white" />
+
+</div>
+
+---
+
+## ระบบบริหารจัดการนิติบุคคล / หมู่บ้านจัดสรร
+
+**เทคโนโลยี:** React Native, Node.js, Express, MySQL, Socket.IO
+
+### ฟีเจอร์หลัก:
+- 🏠 **ระบบจัดการลูกบ้านและบ้าน (CRUD)** — เพิ่ม/แก้ไข/ลบข้อมูลสมาชิกและหน่วยที่อยู่อาศัย
+- 💳 **ระบบชำระเงินค่าส่วนกลาง** — รองรับ PromptPay QR, ตรวจสลิปอัตโนมัติ (Slip2Go), แบ่งจ่ายรายงวด
+- 🔔 **ระบบประกาศข่าวสาร** — แจ้งเตือน Push Notification พร้อมแนบไฟล์/รูปภาพ
+- 🔧 **ระบบแจ้งซ่อม** — แจ้งปัญหา, ติดตามสถานะ, แนบรูปภาพ/วิดีโอ
+- 💬 **ระบบแชทเรียลไทม์** — สื่อสารระหว่างลูกบ้านและผู้ดูแลผ่าน Socket.IO
+- 📊 **ระบบรายงานการเงิน** — สรุปยอดค้างชำระ, ประวัติการชำระเงิน, ส่วนลดรายงวด
+- 🛡️ **Super Admin Panel** — ระบบอนุมัติ, จัดการแอดมิน, ตั้งค่าส่วนลด, ดูประวัติ Logs
+- 🔐 **ระบบล็อกอินผู้ดูแลด้วย JWT Token** — ยืนยันตัวตนพร้อมระบบ Role-Based Access Control
+
+### ลิงก์ GitHub: [github.com/tanutchapol/proj](https://github.com/tanutchapol/proj)
+
+---
 
 ## โครงสร้างหลัก
 
@@ -18,7 +44,7 @@ proj/
 
 - Node.js 18+
 - npm
-- PostgreSQL (สำหรับ backend)
+- MySQL (สำหรับ backend)
 - React Native toolchain (Android Studio / Xcode) สำหรับ `MyApp`
 
 ## เริ่มใช้งานเร็ว

@@ -186,7 +186,30 @@ function registerSettingsRoutes(app) {
           [newRate, newRate, newRate]
         );
         
-        console.log('[Settings] All payments updated with new rate');
+        // Update pending payment_installments based on the newly calculated amount_per_month
+        // Also apply discounts from discount_configs if available
+        await pool.query(
+          `UPDATE payment_installments pi
+           JOIN payments p ON pi.payment_id = p.id
+           LEFT JOIN discount_configs dc ON dc.cycle_months = pi.months_span AND dc.enabled = TRUE
+           SET pi.original_amount = p.amount_per_month * pi.months_span,
+               pi.amount = CASE
+                 WHEN dc.id IS NOT NULL AND dc.discount_type = 'percentage' THEN ROUND(p.amount_per_month * pi.months_span * (1 - dc.discount_value / 100), 2)
+                 WHEN dc.id IS NOT NULL AND dc.discount_type = 'fixed' THEN GREATEST(0, ROUND(p.amount_per_month * pi.months_span - dc.discount_value, 2))
+                 ELSE p.amount_per_month * pi.months_span
+               END,
+               pi.discount_amount = CASE
+                 WHEN dc.id IS NOT NULL THEN ROUND(p.amount_per_month * pi.months_span - CASE
+                   WHEN dc.discount_type = 'percentage' THEN ROUND(p.amount_per_month * pi.months_span * (1 - dc.discount_value / 100), 2)
+                   WHEN dc.discount_type = 'fixed' THEN GREATEST(0, ROUND(p.amount_per_month * pi.months_span - dc.discount_value, 2))
+                   ELSE p.amount_per_month * pi.months_span
+                 END, 2)
+                 ELSE 0
+               END
+           WHERE pi.status NOT IN ('paid', 'waiting_approval')`
+        );
+        
+        console.log('[Settings] All payments and pending installments updated with new rate (with discounts)');
       }
 
       console.log('[Settings] All settings saved successfully');

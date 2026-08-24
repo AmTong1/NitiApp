@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../db/pool');
 const { hasDb } = require('../utils/db');
 const { authGuard, adminOnly } = require('../middleware/auth');
+const { getDiscountForCycle, applyDiscountToAmount } = require('./discount');
 
 // Helper: log month changes to resident_logs table
 async function logMonthChange({ houseNumber, oldMonths, newMonths, user }) {
@@ -137,6 +138,10 @@ async function regenerateInstallmentsForPayment(paymentId) {
     return { regenerated: false, reason: 'installments_table_missing' };
   }
 
+  // Ensure discount columns exist
+  await addColumn('payment_installments', 'original_amount', 'DECIMAL(12,2) NULL');
+  await addColumn('payment_installments', 'discount_amount', 'DECIMAL(12,2) NULL DEFAULT 0');
+
   const [payRows] = await pool.query(
     `SELECT id, house_number, months, amount_per_month, created_at
        FROM payments
@@ -205,19 +210,26 @@ async function regenerateInstallmentsForPayment(paymentId) {
     const periodStart = addMonthsSafe(createdAt, startOffset);
     const periodEnd = addMonthsSafe(createdAt, endOffset);
     const dueDate = periodEnd;
-    const amount = Number(p.amount_per_month || 0) * span;
+    const baseAmount = Number(p.amount_per_month || 0) * span;
+
+    // Apply discount if available for this cycle
+    const discount = await getDiscountForCycle(span);
+    const finalAmount = discount ? applyDiscountToAmount(baseAmount, discount) : baseAmount;
+    const discountAmt = discount ? Math.round((baseAmount - finalAmount) * 100) / 100 : 0;
 
     await pool.query(
       `INSERT INTO payment_installments
-        (payment_id, house_number, installment_no, months_span, due_date, amount, status, paid_at, period_start, period_end)
-       VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?)`,
+        (payment_id, house_number, installment_no, months_span, due_date, amount, original_amount, discount_amount, status, paid_at, period_start, period_end)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?)`,
       [
         paymentId,
         p.house_number,
         currentInstallmentNo,
         span,
         toMySqlDateTime(dueDate),
-        amount,
+        finalAmount,
+        baseAmount,
+        discountAmt,
         toMySqlDate(periodStart),
         toMySqlDate(periodEnd),
       ]

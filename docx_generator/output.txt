@@ -1,0 +1,778 @@
+﻿Reading: C:\Users\tanut\Downloads\��������-V1.9.docx
+File size: 4394765 bytes
+================================================================================
+
+### DOCUMENT STRUCTURE ###
+
+  [KEY] Style=Normal | Text="........................................................		���˹����ѡ�ٵ����ǡ�������������"
+[HEADING] Style=Heading 1 | Text="���Ѵ���"
+  [KEY] Style=Normal | Text="����Ԩ�¹�����ѵ�ػ��ʧ�����;Ѳ���к� NitiSmart ����Ѻ�����èѴ��çҹ�ԵԺؤ�� �����ӹ�¤����дǡ���١��ҹ������˹�ҷ��������к� ���к��տѧ��..."
+[HEADING] Style=Heading 1 | Text="ABSTRACT"
+  [KEY] Style=Normal | Text="�Ե�ԡ�����С��"
+  [KEY] Style=Normal | Text="�͢ͺ��Фس��Ҩ�������ѡ�ٵ÷ء��ҹ ��������Է������ҷ�������ҧ�Ԫҡ����зѡ�з������Ǣ�ͧ �ѹ�繾�鹰ҹ�Ӥѭ㹡�ô��Թ����Ԩ�� ����֧���˹��..."
+  [KEY] Style=Normal | Text="��úѭ"
+[TABLE] Table #1
+[HEADING] Style=Heading 1 | Text="����� 1"
+[HEADING] Style=Heading 2 | Text="1.1 �������Ф����Ӥѭ�ͧ�ѭ��"
+[HEADING] Style=Heading 2 | Text="1.1.1. �����Դ��Ҵ�ԧ��������С���Թ: ������ç�ҹ��㹡�èѴ�红�������Фӹǳ��Ҹ������� �դ�������§�٧�����Դ��ͼԴ��Ҵ ����觼��µç��ͤ�������Ӣͧ�ѭ������Ѻ-��¨��� �ʹ���ͧ�Ѻ�ҹ�Ԩ�¢ͧ ����� �ѡ�� (2566) ����к���ҡ�����к��ԨԷ�Ū���Ŵ��ͼԴ��Ҵ㹡�úѹ�֡��¨���������ҧ���������㹡�èѴ��ç�����ҳ��ǹ��ҧ���ҡ���"
+[HEADING] Style=Heading 2 | Text="1.1.2. �ػ��ä㹡�����������С���駫���: �к�����駫���Ẻ����������ö�Դ���ʶҹ���Ẻ�������� ��� �����ѡɳ� 㨫��� ��Ф�� (2565) ����ҡ���� Mobile Application ����Ŵ��������㹡�û���ҹ�ҹ�駫���������¶֧ 3 �ѹ"
+[HEADING] Style=Heading 2 | Text="1.1.3. ������Ҫ��㹡�õ�Ǩ�ͺ��ê����Թ: ��õ�Ǩ�ͺ��Ի�͹�ԹẺ������ҧ���Чҹ���ԵԺؤ�����ҧ�ҡ ��觧ҹ�Ԩ�¢ͧ �ѭ��� ���Ѳ�� (2564) �׹�ѹ����к���Ǩ�ͺ��Ի�ѵ��ѵ�����öŴ��鹵͹��÷ӧҹ��л�ͧ�ѹ��Ի���������ҧ����ӹ͡�ҡ��� �����Ҷ֧෤����բͧ������١��ҹ�����ҡ�����ѧ�繻Ѩ����Ӥѭ �� �Ե�Ծ��� �������� (2564) �������� UI/UX ������º���¨Ъ�����餹�ء�������֧����٧������Ҷ֧��ԡ����բ�� ��ǡ�Ѻ�������͹Ẻ Push Notification ��� �Ѱ�� ���๵� (2565) �Ԩ�¾���Ҫ���Ŵ�ѵ�ҡ�ä�ҧ������֧ 25% �·���������ͧ���躹�ҵðҹ������ʹ��¢ͧ�����ŵ����� ��ȸ� ���Ѳ�� (2566) ���ʹ��������ǡѺ����� JWT ���ͻ�ͧ�ѹ���������Ţͧ��������ǹ�ؤ��"
+[HEADING] Style=Heading 2 | Text="�����˵ع�� ��м���Ԩ�¨֧���ǤԴ㹡�þѲ���ͻ���पѹ NitiSmart ����¡�дѺ��ú����èѴ��ùԵԺؤ������ջ���Է���Ҿ ����� ��еͺʹͧ����Զժ��Ե�ԨԷ��㹻Ѩ�غѹ"
+[HEADING] Style=Heading 2 | Text="1.2 �ѵ�ػ��ʧ��ͧ�ç�ҹ"
+[HEADING] Style=Heading 2 | Text="1.2.1. �����֡�һѭ����Ф�����ͧ���㹡�ú����èѴ��ùԵԺؤ����ç��������ҹ�Ѵ���"
+[HEADING] Style=Heading 2 | Text="1.2.2. ���;Ѳ���ͻ���पѹ NitiSmart ����Ѻ�Ѵ����к�����Թ ����駫��� ��С������������������ҹ"
+[HEADING] Style=Heading 2 | Text="1.2.3. �����������������㹡�õ�Ǩ�ͺ��á����ҧ����Թ�����к��ѵ��ѵ�"
+[HEADING] Style=Heading 2 | Text="1.2.4. ���ͻ����Թ�����֧��㨢ͧ��������������йԵԺؤ�ŵ�͡����ҹ�к�"
+[HEADING] Style=Heading 2 | Text="1.3 �ͺࢵ�ͧ�ç�ҹ"
+[HEADING] Style=Heading 2 | Text="1.3.1. ��ҹ�ѧ��ѹ��÷ӧҹ (User): ����ö�ٻ�С�� �駫��� �Դ�������ء�Թ ��Ъ��Ф����ǹ��ҧ��ҹ QR Code �����Ṻ��ѡ�ҹ"
+[HEADING] Style=Heading 2 | Text="1.3.2. ��ҹ�ѧ��ѹ��÷ӧҹ (Admin): ����ö�Ѵ��â������١��ҹ ͹��ѵԡ�ê����Թ ���ҧ��С�� �����ػ��§ҹ����Ѻ-��¨���"
+[HEADING] Style=Heading 2 | Text="1.3.3. ��ҹ෤�����: �Ѳ�Ҵ��� React Native (Frontend), Node.js (Backend) ��� MySQL (Database)"
+[HEADING] Style=Heading 2 | Text="1.4 Ἱ���Թ��������������㹡�ô��Թ�ç�ҹ"
+[HEADING] Style=Heading 4 | Text="���ҧ�� 1.1 Ἱ���Թ��������������㹡�ô��Թ�ç�ҹ"
+[HEADING] Style=Heading 2 | Text="1.5 ����ª����Ҵ��Ҩ����Ѻ"
+[HEADING] Style=Heading 3 | Text="1.5.1. �������ԵԺؤ�ź����èѴ��â����������ҧ���к����Ŵ�����Դ��Ҵ��ҹ�ѭ��"
+[HEADING] Style=Heading 3 | Text="1.5.2. �١��ҹ���Ѻ�����дǡ㹡���駻ѭ����еԴ������������Ẻ��������"
+[HEADING] Style=Heading 3 | Text="1.5.3. �������������㹡�ú����çҹ�����ҹ��ҹ�к���Ǩ�ͺ���Ѵਹ"
+[HEADING] Style=Heading 3 | Text="1.5.4. Ŵ������Ѿ�ҡá�д���������㹡�û���ҹ�ҹ"
+[HEADING] Style=Heading 2 | Text="1.6 ������ҳ�����㹡�èѴ���ç�ҹ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 1.2 ������ҳ�����㹡�èѴ���ç�ҹ"
+[HEADING] Style=Heading 1 | Text="����� 2"
+[HEADING] Style=Heading 2 | Text="��ɮ���Чҹ�Ԩ�·������Ǣ�ͧ"
+[HEADING] Style=Heading 2 | Text="2.1 ��ɮմ�ҹ��þѲ����ǹ�Դ��ͼ����ҹ (Frontend Technology)"
+[HEADING] Style=Heading 3 | Text="2.1.1 React Native Framework"
+  [KEY] Style=Normal (Web) | Text="��ç�ҹ NitiSmart ������͡�� React Native ��������ͻ���पѹ�ջ���Է���Ҿ�����§�Ѻ Native App (�ͻ� �����¹��������੾�Тͧ��������ͧ) ����..."
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.1 React Native"
+[HEADING] Style=Heading 3 | Text="2.1.2 TypeScript"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.2 TypeScript"
+[HEADING] Style=Heading 2 | Text="2.2 ��ɮմ�ҹ��û����ż���С��������� (Backend & Communication)"
+[HEADING] Style=Heading 3 | Text="2.2.1 Node.js ��� Express.js"
+[HEADING] Style=Heading 3 | Text="Node.js [3]�����Ҿ�Ǵ��������������� JavaScript ����ö�ӧҹ���������������� ���� V8 Engine �ͧ Google Chrome ����ըش��㹴�ҹ����������С�÷ӧҹẺ Non-blocking I/O (����ö�ӧҹ�������ҧ�������ѹ������ͧ�͡ѹ)  ����͹����������Ѻ Express.js ����� Web Framework ��Ҵ�����ç��ѧ ����������ҧ RESTful API �����繵�ǡ�ҧ㹡���觢����������ҧ��Ͷ�ͧ͢�١��ҹ�Ѻ�ҹ�����ŷ������ҧ�Ǵ���� �ͧ�Ѻ����������ͨҡ�١��ҹ�ӹǹ�ҡ��������ǡѹ�����ҧ���ʶ����Ҿ"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.3 Node.js"
+[HEADING] Style=Heading 3 | Text="2.2.2 Socket.io (����������Ẻ Real-time)"
+  [KEY] Style=Normal | Text="��к� NitiSmart ෤����չ��١������� "�к�ʹ��� (Chat System)" ��� "�������͹ (Notifications)" ���������͹ԵԺؤ���觢�ͤ������ͻ�С�Ȣ������ ..."
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.4 Socket.io"
+[HEADING] Style=Heading 5 | Text="2.2.3 Docker (��è��ͧ��Ҿ�Ǵ�����дѺ Container)"
+[HEADING] Style=Heading 5 | Text="Docker [5]���ŵ����������෤����ա�è��ͧ��Ҿ�Ǵ������ٻẺ Container ���ͷӡ�ú�è��ͻ���पѹ�����ǹ��Сͺ�����繷����� (Dependencies) �������ö�ӧҹ�����ѹ�����ҧ���͡�� ��ç�ҹ NitiSmart ��м��Ѵ����� Docker ����㹡�èѴ����к� Backend ��� Database ������ѭ�Ҥ���ᵡ��ҧ�ͧ��Ҿ�Ǵ���������ҧ����ͧ����������ͧ���Ѳ���������������ԧ (Environment Consistency) ��������õԴ�����з��ͺ�к���������ҧ�Ǵ������������ �ա����ѧ����㹡�èѴ��÷�Ѿ�ҡâͧ�к�����ջ���Է���Ҿ�٧�ش ������â��µ�Ǣͧ�к��͹Ҥ������ͧ�Ѻ�ӹǹ�����ҹ��������������ö�����������դ����ʶ���"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.5 Docker"
+[HEADING] Style=Heading 2 | Text="2.3 �к��Ѵ��ðҹ��������Ф�����ʹ��� (Database & Security)"
+[HEADING] Style=Heading 3 | Text="2.3.1 MySQL Database"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.6 MySQL"
+[HEADING] Style=Heading 3 | Text="2.3.2 JSON Web Token (JWT)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.7 JWT"
+[HEADING] Style=Heading 2 | Text="2.4 �к���ԡ����¹͡��С���Թ�ԨԷ��"
+[HEADING] Style=Heading 3 | Text="2.4.1 Slip2go API (�к���Ǩ�ͺ��Ի�ѵ��ѵ�)"
+  [KEY] Style=Normal (Web) | Text="Slip2go [8]��෤����շ�����Ǩ�ͺ�����١��ͧ�ͧ��Ի�͹�Թ��Ҥ�ü�ҹ����᡹ QR Code (Mini QR) ����ҡ�����Ի ����к� NitiSmart ������١��ҹ�ѻ��..."
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.8 Slip2go"
+[HEADING] Style=Heading 2 | Text="2.5 ����ͧ�������Ѻ��þѲ���ͻ���पѹ"
+[HEADING] Style=Heading 3 | Text="2.5.1 Android Studio"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 2.9 Android Studio"
+[HEADING] Style=Heading 2 | Text="2.6 �ҹ�Ԩ�·������Ǣ�ͧ"
+[HEADING] Style=Heading 3 | Text="2.6.1. ��ͨӡѴ�᪷ͧ�͵��С�õ���ʹ��� Dashboard ����Թ"
+  [KEY] Style=Normal (Web) | Text="���� ���� ����ʹͧҹ�Ԩ������ͧ��ͨӡѴ�᪷ͧ�͵��С�õ���ʹ��� Dashboard ����Թ [10] �ҹ�Ԩ�¹��������֡�Ҽ����ķ���ͧ��ù�෤����ջѭ�һ�д�..."
+[HEADING] Style=Heading 3 | Text="2.6.3. ���Ŵ��ͼԴ��Ҵ������ҧ��������ʷҧ����Թ�ҹ�Ԩ�ª�鹹������֡�֧�������¹��ҹ���ԨԷ�� (Digital Transformation)"
+[HEADING] Style=Heading 3 | Text="2.6.4. ����Է���Ҿ�ͧ�к��駫����͹�Ź�"
+  [KEY] Style=Normal (Web) | Text="�����ѡɳ� 㨫��� ��Ф�� ����ʹͧҹ�Ԩ�¤�м���Ԩ����ӡ�����º��ºǧ������ (Cycle Time) [13]�ͧ��кǹ����駫�������к��ا�ѡ���Ҥ�� �����ҧ�к..."
+[HEADING] Style=Heading 3 | Text="2.6.5. ����͡Ẻ�ͻ���पѹ����Ѻ����٧���� (Universal Design)"
+  [KEY] Style=Normal (Web) | Text="�Ե�Ծ��� �������� ����ʹͧҹ�Ԩ������ͧ�Ԩ�¹�������ѭ�Ҥ������������ӷҧ�ԨԷ�� (Digital Divide) [14]㹡��������٧���� ����繡������Ъҡ÷���..."
+[HEADING] Style=Heading 3 | Text="2.6.6. ���ط����������ü�ҹ Push Notification"
+  [KEY] Style=Normal (Web) | Text="�Ѱ�� ���๵� ����ʹͧҹ�Ԩ������ͧ�����������Է�ԼŢͧ�����������͹Ẻ�ت (Push Notification)[15] ����繡����������ԧ�ء (Proactive Commu..."
+[HEADING] Style=Heading 3 | Text="2.6.7. �ҵðҹ������ʹ��´��� JWT (JSON Web Token)"
+[HEADING] Style=Heading 3 | Text="2.6.8 �к���Ǩ�ͺ��Ի�ѵ��ѵԼ�ҹ API"
+[HEADING] Style=Heading 1 | Text="����� 3"
+[HEADING] Style=Heading 2 | Text="����ͧ��ͷ����㹡�þѲ���к�"
+[HEADING] Style=Heading 3 | Text="3.1.1. ��ǹ�����ż���ѧ��ҹ (Backend): �� Node.js ��� Express.js 㹡�����ҧ RESTful API �����Ѻ�觢�����"
+[HEADING] Style=Heading 3 | Text="3.1.2. �к��Ѵ��ðҹ������ (Database): �� MySQL Database ����Ѻ�Ѵ�红������ԧ����ѹ�����դ����ʶ����٧"
+[HEADING] Style=Heading 3 | Text="3.1.3. �к��׹�ѹ��ǵ�: �� JSON Web Token (JWT) ���ͤ�����ʹ���㹡����Ҷ֧��������ǹ�ؤ��"
+[HEADING] Style=Heading 2 | Text="��鹵͹��ô��Թ�ҹ"
+[HEADING] Style=Heading 3 | Text="3.2.1. �����������ѭ����Ф�����ͧ���: ŧ��鹷�����Ǩ�ѭ��������ҹ�ҭ��졹������ 12 ����ҵ�ͧ����к��������� ��Ǩ�ͺʶҹС���駫����� ��ШѴ��á���Թ�������"
+[HEADING] Style=Heading 3 | Text="3.2.2. ����͡Ẻ�к� (System Design): �͡Ẻʶһѵ¡����������ѧ��ѹ����Թ��С�����������Ҵ��¡ѹ"
+[HEADING] Style=Heading 3 | Text="3.2.3. ��þѲ������� (Implementation): ��¹������������ŷ���ҧἹ��� �� �к������Թ��ҹ QR Code ����к��Դ��������ǹ��ҧ"
+[HEADING] Style=Heading 3 | Text="3.2.4 ��÷��ͺ��л����Թ��: ���ͺ��÷ӧҹ�����Ѻ�����������������Ѵ����Է���Ҿ��Ф����֧���"
+[HEADING] Style=Heading 2 | Text="3.3 ����͡Ẻ��÷ӧҹ�ͧ�к�"
+[TABLE] Table #2
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.2 BPMN �ͧ�к�"
+[TABLE] Table #3
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.3 �к�����Թ�ͧ�ԵԺؤ��"
+[TABLE] Table #4
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.4 �к��Ѵ����١��ҹ�ͧ�ԵԺؤ��"
+[TABLE] Table #5
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.5 �к��������ا�ͧ�ԵԺؤ��"
+[TABLE] Table #6
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.6 �к�������âͧ�ԵԺؤ��"
+[TABLE] Table #7
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.7 �к��������ا�ͧ�١��ҹ"
+[TABLE] Table #8
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.8 �к���èѴ��ùԵԺ�ŤŢͧ������ú�����"
+[TABLE] Table #9
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.9 �к�͹��ѵԢͧ������ú�����"
+[TABLE] Table #10
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.10 �к��ٻ���ѵԢͧ������ú�����"
+[TABLE] Table #11
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.11 �к�������ǹ��ҧ�ͧ�١��ҹ"
+[TABLE] Table #12
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.12 �к��������ا�ͧ�١��ҹ"
+[TABLE] Table #13
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.13 �к�������âͧ�١��ҹ"
+[TABLE] Table #14
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.14 �к������Ţͧ�١��ҹ"
+[HEADING] Style=Heading 2 | Text="3.4 ��á�˹����������ç���ҧ������ (Data Dictionary)"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 3.4.1 ���������Ѻ�к���С���������͹ (Announcement System)"
+[TABLE] Table #15
+[HEADING] Style=Heading 4 | Text="���ҧ��� 3.4.2 ���������Ѻ�к�����Թ��С�ê����Թ (Payment & Financial)"
+[TABLE] Table #16
+[HEADING] Style=Heading 4 | Text="���ҧ��� 3.4.3 ���������Ѻ�к��Ѵ��ü��������Է��� (User & Auth)"
+[TABLE] Table #17
+[HEADING] Style=Heading 2 | Text="3.5 ����͡Ẻ��ǹ�Դ��ͻ���ҹ�ҹ�Ѻ�����"
+  [KEY] Style=Normal | Text="�ҡ���������������͡Ẻ�к����� ���͡Ẻ GUI ˹�ҵ�ҧ�����ҹ���ͧ�鹢ͧ�ͻ���पѹ ���͡Ẻ GUI �����˹�ҵ�ҧ�����ҹ �ѧ���"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.15 GUI ˹�ҵ�ҧ�����ҹ���ͧ�鹢ͧ�ͻ"
+[HEADING] Style=Heading 3 | Text="3.5.1 ˹���������к� (Login)"
+  [KEY] Style=Normal | Text="��˹�ҵ�ҧ�á�ش������Դ�ͻ���पѹ ������Ѻ�׹�ѹ��ǵ����������ҹ�к� ��Сͺ���ª�ͧ��͡���ͼ����/�����, ��ͧ���ʼ�ҹ, �����������к�, ��л..."
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.16 ˹���������к� (Login)"
+[HEADING] Style=Heading 3 | Text="3.5.2 ˹����ѡ (Home / Dashboard)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.17 ˹����ѡ (Home / Dashboard)"
+[HEADING] Style=Heading 3 | Text="3.5.3 ˹��������١��ҹ (Profile)"
+  [KEY] Style=Normal | Text="˹�ҵ�ҧ����Ѻ�ʴ���ШѴ��â�������ǹ�ؤ�Ţͧ�١��ҹ �� ����-���ʡ��, �������Ѿ��, �����������´�ͧ��ҹ���ѡ�����"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.18 ˹��������١��ҹ (Profile)"
+  [KEY] Style=Normal | Text="�����Ţ 1 ���͡�ӹ�˹��"
+[HEADING] Style=Heading 3 | Text="3.5.4 ˹�Ҫ��Ф����ǹ��ҧ (Payment)"
+  [KEY] Style=Normal | Text="˹�ҵ�ҧ����Ѻ���Թ��ê����Թ�����ǹ��ҧ �к����ʴ��ʹ����ͧ���Тͧ�ͺ�Ѩ�غѹ ���ҧ QR Code PromptPay �ѵ��ѵ�����᡹���� ����ջ�������Ѻ�ѻ��Ŵ�..."
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.19 ˹�Ҫ��Ф����ǹ��ҧ (Payment)"
+[HEADING] Style=Heading 3 | Text="3.5.5 ˹����������´��ê����Թ (Payment Detail)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.20 ˹����������´��ê����Թ (Payment Detail)"
+[HEADING] Style=Heading 3 | Text="3.5.6 ˹�һ���ѵԡ�ê����Թ (Payment History)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.21 ˹�һ���ѵԡ�ê����Թ (Payment History)"
+[HEADING] Style=Heading 3 | Text="3.5.7 ˹���駫��� (Repair)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.22 ˹���駫��� (Repair)"
+[HEADING] Style=Heading 3 | Text="3.5.8 ˹��᪷�����ͧʹ��� (Chat)"
+  [KEY] Style=Normal | Text="˹�ҵ�ҧ����Ѻ�ٴ�����ͺ�Ѻ�ԵԺؤ�����ͷ���ҹ�ʹ�Թ�µç �����ͺ��������� ��ͧ���¹ �������˵�Ẻ��������"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.23 ˹��᪷�����ͧʹ��� (Chat)"
+[HEADING] Style=Heading 3 | Text="3.5.9 ˹�������éء�Թ (Call / Emergency)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.24 ˹�������éء�Թ (Call / Emergency)"
+[HEADING] Style=Heading 3 | Text="3.5.10 ˹�ҨѴ����١��ҹ (User Management)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.25 ˹�ҨѴ����١��ҹ (User Management)"
+[HEADING] Style=Heading 3 | Text="3.5.11 ˹�ҵ�Ǩ�ͺʶҹС�ê����Թ (Admin Payment Status)"
+  [KEY] Style=Normal | Text="˹�ҹ���ʹ�Թ������Ѻ�֧��������д���Ի��ѡ�ҹ����͹�Թ����١��ҹṺ����� ���͵�Ǩ�ͺ�����١��ͧ�ͧ�ʹ�Թ ��зӡ�á� "͹��ѵ�" ��¡��"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.26 ˹�ҵ�Ǩ�ͺʶҹС�ê����Թ (Admin Payment Status)"
+[HEADING] Style=Heading 3 | Text="3.5.12 ˹�ҨѴ��û�С�� (Announcement Admin)"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.27 ˹�ҨѴ��û�С�� (Announcement Admin)"
+[HEADING] Style=Heading 3 | Text="3.5.13 ˹������Ѻ-��¨��� (Financial Dashboard)"
+  [KEY] Style=Normal | Text="˹����§ҹ��������ʷҧ����Թ �ʴ���ػ�������Ф������¢ͧ�ç��� �����ٻẺ��ҿ���͢����ŵ���Ţ ��������ʹ�Թ��м����ŵ�Ǩ�ͺʶҹзҧ����Թ�..."
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.28 ˹������Ѻ-��¨��� (Financial Dashboard)"
+[HEADING] Style=Heading 3 | Text="3.5.14 ˹�ҨѴ����дѺ�٧�ش (SuperAdmin Dashboard)"
+  [KEY] Style=Normal | Text="˹�ҤǺ����к��ԧ�֡����Ѻ���Ѵ��ùԵԺؤ�� ���ͼ������к��٧�ش ��Ѵ����Է���ͧ�ʹ�Թ���� ���������͹��ѵԤ���ͧ�ͤ�������¹�ŧ�����ŷҧ���..."
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.29 ˹�ҨѴ����дѺ�٧�ش (SuperAdmin Dashboard)"
+[HEADING] Style=Heading 2 | Text="3.6 ����͡Ẻ�ҹ������"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.30 Ἱ�ѧ ER-diagram"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.31 �Ҿ A Ἱ�ѧ ER-diagram �к���ѡ"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.32 �Ҿ B Ἱ�ѧ ER-diagram �к�����Թ"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.33 �Ҿ C Ἱ�ѧ ER-diagram �к��駫���"
+[HEADING] Style=Heading 5 | Text="�ٻ�� 3.34 �Ҿ D Ἱ�ѧ ER-diagram �к�᪷"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 1: �����źѭ�ռ����ҹ (accounts)"
+[TABLE] Table #18
+[HEADING] Style=Heading 4 | Text="���ҧ��� 2: �����ź�ҹ (houses)"
+[TABLE] Table #19
+[HEADING] Style=Heading 4 | Text="���ҧ��� 3: �������١��ҹ (residents)"
+[TABLE] Table #20
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4: ��������ػʶҹС�ê����Թ�ͧ��ҹ (payments)"
+[TABLE] Table #21
+[HEADING] Style=Heading 4 | Text="���ҧ��� 5: �����ŧǴ��ê����Թ (payment_installments)"
+[TABLE] Table #22
+[HEADING] Style=Heading 4 | Text="���ҧ��� 6: �����żŵ�Ǩ��Ի�ѵ��ѵ� (slipok_verifications)"
+[TABLE] Table #23
+[HEADING] Style=Heading 4 | Text="���ҧ��� 7: �������ʹ PromptPay �ͧ�����ҹ (users)"
+[TABLE] Table #24
+[HEADING] Style=Heading 4 | Text="���ҧ��� 8: �����Ť���������㹡�ê����Թ (payment_intents)"
+[TABLE] Table #25
+[HEADING] Style=Heading 4 | Text="���ҧ��� 9: �����Ż�С�� (announcements)"
+[TABLE] Table #26
+[HEADING] Style=Heading 4 | Text="���ҧ��� 10: �����ż��Դ��� (contacts)"
+[TABLE] Table #27
+[HEADING] Style=Heading 4 | Text="���ҧ��� 11: �����š���駫��� (repairs)"
+[TABLE] Table #28
+[HEADING] Style=Heading 4 | Text="���ҧ��� 12: �ٻ�Ҿ��Сͺ����駫��� (repair_photos)"
+[TABLE] Table #29
+[HEADING] Style=Heading 4 | Text="���ҧ��� 13: ��������᪷ͧ (chat_rooms)"
+[TABLE] Table #30
+[HEADING] Style=Heading 4 | Text="���ҧ��� 14: ��������Ҫԡ��᪷ͧ (chat_members)"
+[TABLE] Table #31
+  [KEY] Style=Normal | Text="���ҧ��� 15: �����Ţ�ͤ���᪷ (chat_messages)"
+[TABLE] Table #32
+[HEADING] Style=Heading 4 | Text="���ҧ��� 16: �����š����ҹ᪷ (chat_room_reads)"
+[TABLE] Table #33
+[HEADING] Style=Heading 4 | Text="���ҧ��� 17: �����š�ûѡ��ش��᪷ͧ��ǹ��� (chat_room_pins)"
+[TABLE] Table #34
+[HEADING] Style=Heading 4 | Text="���ҧ��� 18: �����š�ûѡ��ش��᪷ͧ���ʹ�Թ (chat_room_admin_pins)"
+[TABLE] Table #35
+[HEADING] Style=Heading 4 | Text="���ҧ��� 19: �����š�ûѡ��ش��ͤ��� (chat_message_pins)"
+[TABLE] Table #36
+[HEADING] Style=Heading 4 | Text="���ҧ��� 20: �����š���ʴ���������֡�᪷ (chat_reactions)"
+[TABLE] Table #37
+[HEADING] Style=Heading 4 | Text="���ҧ��� 21: �����š�õ�駤���к� (system_settings)"
+[TABLE] Table #38
+[HEADING] Style=Heading 4 | Text="���ҧ��� 22: ����ѵԡ�èѴ��â������١��ҹ (resident_logs)"
+[TABLE] Table #39
+[HEADING] Style=Heading 4 | Text="���ҧ��� 23: ����ѵԡ����䢢������駫��� (repair_edit_logs)"
+[TABLE] Table #40
+[HEADING] Style=Heading 4 | Text="���ҧ��� 24: ����ѵԡ�èѴ��û�С�� (announcement_logs)"
+[TABLE] Table #41
+[TABLE] Table #42
+[TABLE] Table #43
+[TABLE] Table #44
+[TABLE] Table #45
+  [KEY] Style=Normal | Text="�����˵�����Ѻ�������ٻ�����ç�ҹ (����� 4 ���� ����� 5):������ŨҡẺ�����Թ���й���Ҥ������� (Mean: $\bar{x}$) ��Ф����ǹ���§ູ�ҵðҹ (St..."
+[HEADING] Style=Heading 1 | Text="����� 4"
+  [KEY] Style=Normal | Text="��þѲ���к������èѴ��ùԵԺؤ�� (NitiSmart) ���Ѳ������ʹͼš�ô��Թ�ҹ ��觻�Сͺ���� 2 ��ǹ��ѡ ��� �Ţͧ��þѲ���к� ��мš�÷��ͺ�к� �����..."
+[HEADING] Style=Heading 2 | Text="4.1 �Ţͧ��þѲ���к�"
+  [KEY] Style=Normal | Text="���Ѳ�����͡Ẻ��оѲ���к� NitiSmart ����˹�Ҩ͡�÷ӧҹ�����ͧ�Ѻ�١��ҹ (Resident), �ԵԺؤ�� (Admin) ��С�����ú����� (SuperAdmin) ���������..."
+  [KEY] Style=Normal | Text="1) ˹���������к�"
+[TABLE] Table #46
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.1 ˹�� login"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.1���������´��÷ӧҹ�ͧ˹���������к�"
+[TABLE] Table #47
+  [KEY] Style=Normal | Text="2) ˹�����������ҹ"
+[TABLE] Table #48
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.2 ˹�����������ҹ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.2���������´��÷ӧҹ�ͧ˹�����������ҹ"
+[TABLE] Table #49
+  [KEY] Style=Normal | Text="4) ˹�ҡ�õ�駤���ͻ���पѹ"
+[TABLE] Table #50
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.3���������´��÷ӧҹ�ͧ˹�ҡ�õ�駤���ͻ���पѹ"
+[TABLE] Table #51
+  [KEY] Style=Normal | Text="5) ˹����ѡ"
+[TABLE] Table #52
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.3 ˹����ѡ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.4���������´��÷ӧҹ�ͧ˹����ѡ"
+[TABLE] Table #53
+  [KEY] Style=Normal | Text="8) ˹��ʶҹС�ê����Թ��§Ǵ"
+[TABLE] Table #54
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.4 ˹��ʶҹС�ê����Թ��§Ǵ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.5���������´��÷ӧҹ�ͧ˹��ʶҹС�ê����Թ"
+[TABLE] Table #55
+  [KEY] Style=Normal | Text="9) ˹�Ҥ������������駪����Թ"
+[TABLE] Table #56
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.5 ˹�Ҥ������������駪����Թ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.6���������´��÷ӧҹ�ͧ˹�Ҥ������������駪����Թ"
+[TABLE] Table #57
+  [KEY] Style=Normal | Text="10) ˹�һ���ѵԡ�ê����Թ��͹��ѧ"
+[TABLE] Table #58
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.6 ˹�һ���ѵԡ�ê����Թ��͹��ѧ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.7���������´��÷ӧҹ�ͧ˹�һ���ѵԡ�ê����Թ"
+[TABLE] Table #59
+  [KEY] Style=Normal | Text="11) ˹���к��駫��� - �Ҿ�����¡��"
+[TABLE] Table #60
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.7 ˹���к��駫��� - �Ҿ�����¡��"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.8���������´��÷ӧҹ�ͧ˹���к��駫��� (�Ҿ�����¡��)"
+[TABLE] Table #61
+  [KEY] Style=Normal | Text="12) ˹���к��駫��� - Ẻ������駻ѭ��"
+[TABLE] Table #62
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.8 ˹��Ẻ������駫���"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.9���������´��÷ӧҹ�ͧ˹���к��駫��� (Ẻ������駻ѭ��)"
+[TABLE] Table #63
+  [KEY] Style=Normal | Text="13) ˹�������ª��͡��ʹ��� (ChatList)"
+[TABLE] Table #64
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.9 ˹�������ª��͡��ʹ���"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.10���������´��÷ӧҹ�ͧ˹�������ª��͡��ʹ���"
+[TABLE] Table #65
+  [KEY] Style=Normal | Text="14) ˹�ҵ�ҧʹ��� (ChatRoom)"
+[TABLE] Table #66
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.10 ˹�ҵ�ҧʹ���"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.11���������´��÷ӧҹ�ͧ˹�ҵ�ҧʹ���"
+[TABLE] Table #67
+  [KEY] Style=Normal | Text="15) ˹�������éء�Թ"
+[TABLE] Table #68
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.11 ˹�������éء�Թ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.12���������´��÷ӧҹ�ͧ˹���к����Ѿ��"
+[TABLE] Table #69
+  [KEY] Style=Normal | Text="17) ˹�ҨѴ��â������١��ҹ"
+[TABLE] Table #70
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.12 ˹�ҨѴ��â������١��ҹ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.13���������´��÷ӧҹ�ͧ˹�ҨѴ��â������١��ҹ"
+[TABLE] Table #71
+  [KEY] Style=Normal | Text="18) ˹������Ѻ - ��¨���"
+[TABLE] Table #72
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.13 ˹������Ѻ - ��¨���"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.14���������´��÷ӧҹ�ͧ˹�ҨѴ��á���Թ��ҧ"
+[TABLE] Table #73
+  [KEY] Style=Normal | Text="19) ˹��ᴪ���촫ػ�����ʹ�Թ"
+[TABLE] Table #74
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.14 ˹��ᴪ���촫ػ�����ʹ�Թ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.15���������´��÷ӧҹ�ͧ˹��ᴪ���촫ػ�����ʹ�Թ"
+[TABLE] Table #75
+  [KEY] Style=Normal | Text="20) ˹�ҨѴ��úѭ�ռ������к�"
+[TABLE] Table #76
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.15 ˹��ᴪ���촫ػ�����ʹ�Թ"
+  [KEY] Style=Normal | Text="�ٻ��� 4.12 ˹��ᴪ���촫ػ�����ʹ�Թ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.16���������´��÷ӧҹ�ͧ˹�ҨѴ��úѭ�ռ������к�"
+[TABLE] Table #77
+  [KEY] Style=Normal | Text="21) ˹�ҡ��͹��ѵ�"
+[TABLE] Table #78
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.16 ˹�ҨѴ��úѭ�ռ������к�"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.17���������´��÷ӧҹ�ͧ˹�ҡ��͹��ѵ��дѺ�٧"
+[TABLE] Table #79
+  [KEY] Style=Normal | Text="22) ˹�Һѹ�֡����ѵԨѴ��ê����Թ"
+[TABLE] Table #80
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.17 ˹�Һѹ�֡����ѵԨѴ��ê����Թ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.18���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԨѴ��ê����Թ"
+[TABLE] Table #81
+  [KEY] Style=Normal | Text="23) ˹�Һѹ�֡����ѵԡ���駫���"
+[TABLE] Table #82
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.18 ˹�Һѹ�֡����ѵԡ���駫���"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.19���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԡ���駫���"
+[TABLE] Table #83
+  [KEY] Style=Normal | Text="24) ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ"
+[TABLE] Table #84
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.19 ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.20���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ"
+[TABLE] Table #85
+  [KEY] Style=Normal | Text="25) ˹�Һѹ�֡����ѵԨѴ��û�С��"
+[TABLE] Table #86
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.20 ˹�Һѹ�֡����ѵԨѴ��û�С��"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.21���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԨѴ��û�С��"
+[TABLE] Table #87
+  [KEY] Style=Normal | Text="28) ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ"
+[TABLE] Table #88
+[HEADING] Style=Heading 5 | Text="�ٻ��� 4.21 ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.22���������´��÷ӧҹ�ͧ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ"
+[TABLE] Table #89
+[HEADING] Style=Heading 2 | Text="4.2 �Ţͧ��÷��ͺ�����١��ͧ�ͧ�ԧ����С�ùӷҧ (Link & Navigation Testing)"
+  [KEY] Style=Normal | Text="��÷��ͺ�����١��ͧ�ͧ�ԧ����С������¹˹�Ҩ� (Navigation) �������ǹ�Ӥѭ����������ͻ���पѹ�դ����ʶ��� �����觼š�÷��ͺ�͡��������ǹ��÷..."
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.23����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�ѭ�ռ�������˹����ѡ"
+[TABLE] Table #90
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.24����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ��ê����Թ����к��駫���"
+[TABLE] Table #91
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.25����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�к�᪷����ʹ�Թ�ԵԺؤ��"
+[TABLE] Table #92
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.26����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�к���ѧ��ҹ (SuperAdmin)"
+[TABLE] Table #93
+  [KEY] Style=Normal | Text="��ػ�š�÷��ͺ�����١��ͧ�ͧ�ԧ��:��ҡ��ô��Թ��÷��ͺ�����١��ͧ�ͧ�ԧ��㹷ء��ǹ�ͧ����ͻ���पѹ (Mobile App) NitiSmart ����� ���������§�ԧ�� �..."
+[HEADING] Style=Heading 2 | Text=""
+[HEADING] Style=Heading 2 | Text="4.3 �š�÷��ͺ�������Ѻ�ͧ�����ҹ (UAT)"
+[TABLE] Table #94
+[TABLE] Table #95
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.27��ѹ�֡��÷��ͺ�������Ѻ�ͧ�����ҹ (UAT) ���駷�� 1 16/4/��69"
+[TABLE] Table #96
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.28�ࡳ���õѴ�Թ��÷��ͺ"
+[TABLE] Table #97
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.29���ػ�š�÷��ͺ�������Ѻ�ͧ�����ҹ"
+[TABLE] Table #98
+[HEADING] Style=Heading 2 | Text="4.4 �š�û����Թ����Է���Ҿ��Ф����֧���"
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.30��š�û����Թ��ҹ��÷ӧҹ����ѧ��ѹ�ͧ�к� (Functional Requirement Test)"
+[TABLE] Table #99
+[TABLE] Table #100
+[HEADING] Style=Heading 4 | Text="���ҧ��� 4.31��š�û����Թ��ҹ����Է���Ҿ��÷ӧҹ (Performance Test)"
+[TABLE] Table #101
+[HEADING] Style=Heading 2 | Text="���ҧ��� 4.32��š�û����Թ��ҹ����͡Ẻ��Ф�������㹡����ҹ (Usability Test)"
+[TABLE] Table #102
+[HEADING] Style=Heading 2 | Text="���ҧ��� 4.33��š�û����Թ��ҹ������蹤���ʹ��¢ͧ������ (Security Test)"
+[TABLE] Table #103
+[HEADING] Style=Heading 1 | Text="����� 5"
+[HEADING] Style=Heading 2 | Text="5.1 ��ػ�š�ô��Թ�ҹ (Conclusion)"
+[HEADING] Style=Heading 3 | Text="5.1.1. �к��Ѵ��â������١��ҹ��м����ҹ:�����ö�ѹ�֡ ��� ������Է�������ҹ�����ҧ�١��ҹ (User) ��йԵԺؤ�� (Admin) �����ҧ�١��ͧ��л�ʹ���"
+[HEADING] Style=Heading 3 | Text="5.1.2 �к�����Թ��Ф����ǹ��ҧ:��١��ҹ����ö��Ǩ�ͺ�ʹ��ҧ���� ��Ъ����Թ��ҹ����᡹ QR Code (PromptPay) �� ���к�����ö�֧�����Ũҡ��Ի�͹�Թ (e-Slip) �ҵ�Ǩ�ͺ�����١��ͧ��ҹ API �ͧ SlipOK ����ѻവʶҹС�ê����Թ����ѵ��ѵ� ��ͧ�ѹ�ѭ�ҡ������Ի����������Ի���"
+[HEADING] Style=Heading 3 | Text="5.1.3. �к��駫���:��١��ҹ����ö�駻ѭ�� �駫��� �����Ṻ�Ҿ���� �¹ԵԺؤ������ö�Դ�������ѻവʶҹС�ë����������ҧ���к�"
+[HEADING] Style=Heading 3 | Text="5.1.4. �к���С�Ȣ������:��ԵԺؤ������ö��Ш�¢��������лѡ��ش��С���Ӥѭ ��������١��ҹ�Ѻ��Һ�����������ҧ�Ǵ���Ǽ�ҹ�ͻ���पѹ"
+[HEADING] Style=Heading 3 | Text="5.1.5. �к�ʹ��� (Chat System):��١��ҹ��йԵԺؤ������ö�Դ���������áѹ��Ẻ Real-time �ͧ�Ѻ����觢�ͤ�������ٻ�Ҿ ����Ŵ��ͧ��ҧ㹡���������"
+[HEADING] Style=Heading 2 | Text="��Ի��¼� (Discussion)"
+  [KEY] Style=Normal | Text="�ҡ�š�û����Թ����Է���Ҿ��Ф����֧��㨢ͧ�����ҹ㹺���� 4 ����Ҽ����ҹ�դ����֧�����Ҿ����дѺ����ҡ�(�������� 4.60 ����) ������ö��Ի��¼..."
+[HEADING] Style=Heading 3 | Text="5.2.1. ��ҹ������蹤���ʹ��¢ͧ������:����Ѻ��ṹ�����Թ�٧�ش ���ͧ�ҡ�к��ա���¡�дѺ�Է�������ҹ�Ѵਹ ����к���ê����Թ�ա�кǹ��õ�Ǩ�ͺ��Ի (SlipOK Verification) ����ͧ�ѹ��÷ب�Ե�����ҧ�ջ���Է���Ҿ ���������ҹ�դ����������㹡�÷Ӹ�á����ҧ����Թ��ҹ�ͻ���पѹ"
+[HEADING] Style=Heading 3 | Text="5.2.2. ��ҹ����͡Ẻ��Ф�������㹡����ҹ (UX/UI):������ҹ�֧�����ٻẺ˹�Ҩͷ��ѹ���� ��ҹ���� ����բ�鹵͹�����ҹ������Ѻ��͹ �� ��è����Թ�������ö�Ө����������鹵͹"
+[HEADING] Style=Heading 3 | Text="5.2.3. ��ҹ����Է���Ҿ��÷ӧҹ:��к�᪷ Real-time ���Ѳ�Ҵ��� Socket.io ����ö�觢�ͤ������Ǵ��������ʶ��� ����֧��õ�Ǩ�ͺ��Ի�ѵ��ѵԷ��ӧҹ������� ����Ŵ���Тͧ�ԵԺؤ��㹡���ҹ�觵�Ǩ�ͺ��Ի����������ҧ�ҡ"
+[HEADING] Style=Heading 2 | Text="5.3 �ѭ������ػ��ä (Problems and Obstacles)"
+[HEADING] Style=Heading 3 | Text="5.3.1. ����������͡Ѻ API ��¹͡:�������á�ͧ��þѲ�� ����������͡Ѻ API �ͧ SlipOK ���͵�Ǩ�ͺ��Ի�͹�Թ�ջѭ������ͧ�ٻẺ������ (JSON Format) ������ͧ�������֡�Ҥ�������л�Ѻ�������ʹ֧�����Ÿ�Ҥ����Шӹǹ�Թ�ҵ�Ǩ�ͺ���١��ͧ"
+[HEADING] Style=Heading 3 | Text="5.3.2. ��èѴ���ʶҹ�Ẻ Real-time:���þѲ���к�᪷����к��ѻവʶҹС���駫���Ẻ�ѹ�� (Real-time) ��ͧ��������Ѵ���ѧ㹡�èѴ������������ Socket.io �����������ͻ���पѹ�Դ����˹�ǧ������ռ����ҹ������ѹ���¤�"
+[HEADING] Style=Heading 3 | Text="5.3.3. ������ҡ���¢ͧ˹�Ҩ������⿹:�����͡Ẻ UI ����ͧ�Ѻ˹�Ҩ������⿹����բ�Ҵ����Ѵ��ǹᵡ��ҧ�ѹ (Responsive Design) �� React Native ��ͧ�����һ�Ѻ���������ͧ���Сͺ��ҧ� �ʴ�������§�����ء�ػ�ó�"
+[HEADING] Style=Heading 2 | Text="5.4 ����ʹ������͡�þѲ�ҵ���ʹ (Recommendations for Future Work)"
+[HEADING] Style=Heading 3 | Text="5.4.1. �к�����͹��ҹ Push Notification:���������к� Push Notification (�� �� Firebase Cloud Messaging) ��������͹������բ�ͤ���᪷���� �ջ�С�ȴ�ǹ �������֧��˹����Ф����ǹ��ҧ ���������Դ�ͻ���पѹ��ҧ���"
+[HEADING] Style=Heading 3 | Text="5.4.2. �к��᡹���·���¹ö���ͺѵ�����͡ (Access Control):��Ѳ���к��������͡Ѻ���ͧǧ�ûԴ���������˹�������ҹ �����ӹ�¤����дǡ㹡�����-�͡�ͧ�١��ҹ��м���ҵԴ��� (Visitor Management)"
+[HEADING] Style=Heading 3 | Text="5.4.3. Dashboard ��� Export ������:�����˹�� Dashboard ����Ѻ�ԵԺؤ��㹡�ô�ʶԵ�����Ѻ-��¨��¢ͧ�����ҹ��ٻẺ��ҿ �������ö Export ��������§ҹ�ҧ����Թ�͡������� Excel ���� PDF ���͹�价Ӻѭ����ػ�ʹ��Шӻ�����¢��"
+  [KEY] Style=Normal | Text="��óҹء��"
+
+================================================================================
+
+Total paragraphs: 891
+Total tables: 103
+Total images: 135
+
+
+### ALL HEADINGS ###
+
+  [Normal] ........................................................		���˹����ѡ�ٵ����ǡ�������������
+  [Heading 1] ���Ѵ���
+  [Normal] ����Ԩ�¹�����ѵ�ػ��ʧ�����;Ѳ���к� NitiSmart ����Ѻ�����èѴ��çҹ�ԵԺؤ�� �����ӹ�¤����дǡ���١��ҹ������˹�ҷ��������к� ���к��տѧ��ѹ��ѡ ���� �к��Ѵ��ä����ǹ��ҧ��Ъ����Թ�͹�Ź� �к��駫��� ����к���С�Ȣ��������С��������� ��觪�������èѴ��â��������к������Ҷ֧���Ǵ���Ǣ��
+  [Heading 1] ABSTRACT
+  [Normal] �Ե�ԡ�����С��
+  [Normal] �͢ͺ��Фس��Ҩ�������ѡ�ٵ÷ء��ҹ ��������Է������ҷ�������ҧ�Ԫҡ����зѡ�з������Ǣ�ͧ �ѹ�繾�鹰ҹ�Ӥѭ㹡�ô��Թ����Ԩ�� ����֧���˹�ҷ�����˹��§ҹ�������Ǣ�ͧ�����������͹������������ ����������� ����ӹ�¤����дǡ 㹡�����Ǻ�����������з��ͺ�к������ҧ�����
+  [Normal] ��úѭ
+  [Heading 1] ����� 1
+  [Heading 2] 1.1 �������Ф����Ӥѭ�ͧ�ѭ��
+  [Heading 2] 1.1.1. �����Դ��Ҵ�ԧ��������С���Թ: ������ç�ҹ��㹡�èѴ�红�������Фӹǳ��Ҹ������� �դ�������§�٧�����Դ��ͼԴ��Ҵ ����觼��µç��ͤ�������Ӣͧ�ѭ������Ѻ-��¨��� �ʹ���ͧ�Ѻ�ҹ�Ԩ�¢ͧ ����� �ѡ�� (2566) ����к���ҡ�����к��ԨԷ�Ū���Ŵ��ͼԴ��Ҵ㹡�úѹ�֡��¨���������ҧ���������㹡�èѴ��ç�����ҳ��ǹ��ҧ���ҡ���
+  [Heading 2] 1.1.2. �ػ��ä㹡�����������С���駫���: �к�����駫���Ẻ����������ö�Դ���ʶҹ���Ẻ�������� ��� �����ѡɳ� 㨫��� ��Ф�� (2565) ����ҡ���� Mobile Application ����Ŵ��������㹡�û���ҹ�ҹ�駫���������¶֧ 3 �ѹ
+  [Heading 2] 1.1.3. ������Ҫ��㹡�õ�Ǩ�ͺ��ê����Թ: ��õ�Ǩ�ͺ��Ի�͹�ԹẺ������ҧ���Чҹ���ԵԺؤ�����ҧ�ҡ ��觧ҹ�Ԩ�¢ͧ �ѭ��� ���Ѳ�� (2564) �׹�ѹ����к���Ǩ�ͺ��Ի�ѵ��ѵ�����öŴ��鹵͹��÷ӧҹ��л�ͧ�ѹ��Ի���������ҧ����ӹ͡�ҡ��� �����Ҷ֧෤����բͧ������١��ҹ�����ҡ�����ѧ�繻Ѩ����Ӥѭ �� �Ե�Ծ��� �������� (2564) �������� UI/UX ������º���¨Ъ�����餹�ء�������֧����٧������Ҷ֧��ԡ����բ�� ��ǡ�Ѻ�������͹Ẻ Push Notification ��� �Ѱ�� ���๵� (2565) �Ԩ�¾���Ҫ���Ŵ�ѵ�ҡ�ä�ҧ������֧ 25% �·���������ͧ���躹�ҵðҹ������ʹ��¢ͧ�����ŵ����� ��ȸ� ���Ѳ�� (2566) ���ʹ��������ǡѺ����� JWT ���ͻ�ͧ�ѹ���������Ţͧ��������ǹ�ؤ��
+  [Heading 2] �����˵ع�� ��м���Ԩ�¨֧���ǤԴ㹡�þѲ���ͻ���पѹ NitiSmart ����¡�дѺ��ú����èѴ��ùԵԺؤ������ջ���Է���Ҿ ����� ��еͺʹͧ����Զժ��Ե�ԨԷ��㹻Ѩ�غѹ
+  [Heading 2] 1.2 �ѵ�ػ��ʧ��ͧ�ç�ҹ
+  [Heading 2] 1.2.1. �����֡�һѭ����Ф�����ͧ���㹡�ú����èѴ��ùԵԺؤ����ç��������ҹ�Ѵ���
+  [Heading 2] 1.2.2. ���;Ѳ���ͻ���पѹ NitiSmart ����Ѻ�Ѵ����к�����Թ ����駫��� ��С������������������ҹ
+  [Heading 2] 1.2.3. �����������������㹡�õ�Ǩ�ͺ��á����ҧ����Թ�����к��ѵ��ѵ�
+  [Heading 2] 1.2.4. ���ͻ����Թ�����֧��㨢ͧ��������������йԵԺؤ�ŵ�͡����ҹ�к�
+  [Heading 2] 1.3 �ͺࢵ�ͧ�ç�ҹ
+  [Heading 2] 1.3.1. ��ҹ�ѧ��ѹ��÷ӧҹ (User): ����ö�ٻ�С�� �駫��� �Դ�������ء�Թ ��Ъ��Ф����ǹ��ҧ��ҹ QR Code �����Ṻ��ѡ�ҹ
+  [Heading 2] 1.3.2. ��ҹ�ѧ��ѹ��÷ӧҹ (Admin): ����ö�Ѵ��â������١��ҹ ͹��ѵԡ�ê����Թ ���ҧ��С�� �����ػ��§ҹ����Ѻ-��¨���
+  [Heading 2] 1.3.3. ��ҹ෤�����: �Ѳ�Ҵ��� React Native (Frontend), Node.js (Backend) ��� MySQL (Database)
+  [Heading 2] 1.4 Ἱ���Թ��������������㹡�ô��Թ�ç�ҹ
+  [Heading 4] ���ҧ�� 1.1 Ἱ���Թ��������������㹡�ô��Թ�ç�ҹ
+  [Heading 2] 1.5 ����ª����Ҵ��Ҩ����Ѻ
+  [Heading 3] 1.5.1. �������ԵԺؤ�ź����èѴ��â����������ҧ���к����Ŵ�����Դ��Ҵ��ҹ�ѭ��
+  [Heading 3] 1.5.2. �١��ҹ���Ѻ�����дǡ㹡���駻ѭ����еԴ������������Ẻ��������
+  [Heading 3] 1.5.3. �������������㹡�ú����çҹ�����ҹ��ҹ�к���Ǩ�ͺ���Ѵਹ
+  [Heading 3] 1.5.4. Ŵ������Ѿ�ҡá�д���������㹡�û���ҹ�ҹ
+  [Heading 2] 1.6 ������ҳ�����㹡�èѴ���ç�ҹ
+  [Heading 4] ���ҧ��� 1.2 ������ҳ�����㹡�èѴ���ç�ҹ
+  [Heading 1] ����� 2
+  [Heading 2] ��ɮ���Чҹ�Ԩ�·������Ǣ�ͧ
+  [Heading 2] 2.1 ��ɮմ�ҹ��þѲ����ǹ�Դ��ͼ����ҹ (Frontend Technology)
+  [Heading 3] 2.1.1 React Native Framework
+  [Normal (Web)] ��ç�ҹ NitiSmart ������͡�� React Native ��������ͻ���पѹ�ջ���Է���Ҿ�����§�Ѻ Native App (�ͻ� �����¹��������੾�Тͧ��������ͧ) ������Ѵ����㹡�þѲ���ҡ���� �͡�ҡ����ѧ�ͧ�Ѻ����ѻവẺ Hot Reloading ��觪��������Ѳ������ö��繡������¹�ŧ�ͧ˹�Ҩ���ѹ����ѧ�ҡ�����
+  [Heading 5] �ٻ�� 2.1 React Native
+  [Heading 3] 2.1.2 TypeScript
+  [Heading 5] �ٻ�� 2.2 TypeScript
+  [Heading 2] 2.2 ��ɮմ�ҹ��û����ż���С��������� (Backend & Communication)
+  [Heading 3] 2.2.1 Node.js ��� Express.js
+  [Heading 3] Node.js [3]�����Ҿ�Ǵ��������������� JavaScript ����ö�ӧҹ���������������� ���� V8 Engine �ͧ Google Chrome ����ըش��㹴�ҹ����������С�÷ӧҹẺ Non-blocking I/O (����ö�ӧҹ�������ҧ�������ѹ������ͧ�͡ѹ)  ����͹����������Ѻ Express.js ����� Web Framework ��Ҵ�����ç��ѧ ����������ҧ RESTful API �����繵�ǡ�ҧ㹡���觢����������ҧ��Ͷ�ͧ͢�١��ҹ�Ѻ�ҹ�����ŷ������ҧ�Ǵ���� �ͧ�Ѻ����������ͨҡ�١��ҹ�ӹǹ�ҡ��������ǡѹ�����ҧ���ʶ����Ҿ
+  [Heading 5] �ٻ�� 2.3 Node.js
+  [Heading 3] 2.2.2 Socket.io (����������Ẻ Real-time)
+  [Normal] ��к� NitiSmart ෤����չ��١������� "�к�ʹ��� (Chat System)" ��� "�������͹ (Notifications)" ���������͹ԵԺؤ���觢�ͤ������ͻ�С�Ȣ������ ��ͤ�������ҹ�鹨��駢�鹺�˹�Ҩͧ͢�١��ҹ�ѹ���·���١��ҹ����ͧ�ӡ�����ê˹�Ҩ� (Refresh) �������ҧ���ʺ��ó�����ҹ�������������͹�ͻ���पѹ��������дѺ�ҡ�
+  [Heading 5] �ٻ�� 2.4 Socket.io
+  [Heading 5] 2.2.3 Docker (��è��ͧ��Ҿ�Ǵ�����дѺ Container)
+  [Heading 5] Docker [5]���ŵ����������෤����ա�è��ͧ��Ҿ�Ǵ������ٻẺ Container ���ͷӡ�ú�è��ͻ���पѹ�����ǹ��Сͺ�����繷����� (Dependencies) �������ö�ӧҹ�����ѹ�����ҧ���͡�� ��ç�ҹ NitiSmart ��м��Ѵ����� Docker ����㹡�èѴ����к� Backend ��� Database ������ѭ�Ҥ���ᵡ��ҧ�ͧ��Ҿ�Ǵ���������ҧ����ͧ����������ͧ���Ѳ���������������ԧ (Environment Consistency) ��������õԴ�����з��ͺ�к���������ҧ�Ǵ������������ �ա����ѧ����㹡�èѴ��÷�Ѿ�ҡâͧ�к�����ջ���Է���Ҿ�٧�ش ������â��µ�Ǣͧ�к��͹Ҥ������ͧ�Ѻ�ӹǹ�����ҹ��������������ö�����������դ����ʶ���
+  [Heading 5] �ٻ�� 2.5 Docker
+  [Heading 2] 2.3 �к��Ѵ��ðҹ��������Ф�����ʹ��� (Database & Security)
+  [Heading 3] 2.3.1 MySQL Database
+  [Heading 5] �ٻ�� 2.6 MySQL
+  [Heading 3] 2.3.2 JSON Web Token (JWT)
+  [Heading 5] �ٻ�� 2.7 JWT
+  [Heading 2] 2.4 �к���ԡ����¹͡��С���Թ�ԨԷ��
+  [Heading 3] 2.4.1 Slip2go API (�к���Ǩ�ͺ��Ի�ѵ��ѵ�)
+  [Normal (Web)] Slip2go [8]��෤����շ�����Ǩ�ͺ�����١��ͧ�ͧ��Ի�͹�Թ��Ҥ�ü�ҹ����᡹ QR Code (Mini QR) ����ҡ�����Ի ����к� NitiSmart ������١��ҹ�ѻ��Ŵ��Ի����͹�Թ����� �к��д��Թ����觢�������Ի仵�Ǩ�ͺ�Ѻ slip2go API ���ѵ��ѵ������׹�ѹ�����١��ͧ㹷ѹ�� ��駡�õ�Ǩ�ͺ����ʹ�Թ�͹�ç�Ѻ�ʹ��ҧ���Ш�ԧ������� ����示ѭ�ջ��·ҧ����繡���͹��Һѭ�բͧ�ԵԺؤ�����ҧ�١��ͧ ����֧��õ�Ǩ�ͺ��͹��ѧ�����Ի�ѧ������¶١������ҹ��к�����������ѧ��觿����������繨ش���Ӥѭ������Ŵ���Чҹ�ͧ���˹�ҷ��ԵԺؤ��㹡�õ�Ǩ�ͺ��Ի���µ����Ҫ�������ú����èѴ��úѭ���դ����Ǵ���� ��л�ͧ�ѹ��÷ب�Ե���͡������Ի���������ҧ�ջ���Է���Ҿ�٧�ش
+  [Heading 5] �ٻ�� 2.8 Slip2go
+  [Heading 2] 2.5 ����ͧ�������Ѻ��þѲ���ͻ���पѹ
+  [Heading 3] 2.5.1 Android Studio
+  [Heading 5] �ٻ�� 2.9 Android Studio
+  [Heading 2] 2.6 �ҹ�Ԩ�·������Ǣ�ͧ
+  [Heading 3] 2.6.1. ��ͨӡѴ�᪷ͧ�͵��С�õ���ʹ��� Dashboard ����Թ
+  [Normal (Web)] ���� ���� ����ʹͧҹ�Ԩ������ͧ��ͨӡѴ�᪷ͧ�͵��С�õ���ʹ��� Dashboard ����Թ [10] �ҹ�Ԩ�¹��������֡�Ҽ����ķ���ͧ��ù�෤����ջѭ�һ�д�ɰ���ٻẺ᪷�͵ (Chatbot) �һ���ء���������繼���������͹ (Virtual Assistant) 㹡�õͺ�Ӷ���������ԡ�þ�鹰ҹ���������������ç��� ���ҧ�á��� ����к�᪷�͵�ШѴ��çҹʹ�����ͺ��� ���Ѻ����ͧ�����Ӥѭ����͵�ͧ�Ѵ��áѺ�����ŷ�����ç���ҧ�Ѻ��͹ �� ��ػ�ʹ����Ѻ-��¨��¢ͧ�ԵԺؤ�� ������§ҹ����Ż�Ш���͹ �ç��� NitiSmart �֧���óҡ����оѲ������� Dashboard �ҧ����Թ������������ �����ʴ��Ţ������ԧ��ȹ�Ҿ (Data Visualization) �������Ӥ�����������¢��  ��ʹ�: Ŵ���Чҹ��Ш� (Routine Work): ����Ŵ���Тͧ���˹�ҷ��ԵԺؤ��㹡�õ�ͧ�ҹ�觵ͺ�Ӷ������ ��ʹ 24 ������� ��������˹�ҷ��������⿡�ʡѺ�ҹ�����èѴ�����ǹ���¡�дѺ��ù��ʹ͢�����: ����� Dashboard ���������� ���������ö�ʴ��Ţ�������ٻẺ��ҿ ���͵��ҧ��ػ�� ��觪�����������Է���Ҿ㹡��������â����ŷҧ����Թ���Ѻ��͹ ��ͨӡѴ: ��ͨӡѴ�ҧʶһѵ¡����᪷ͧ�͵: �ٻẺ����ʴ��Ţ᪷ͧ�͵ (Text-based ���� Card-based) �վ�鹷��ӡѴ �������������ҧ��觡Ѻ��ù��ʹ���§ҹ��ػ������ (Summary Report) ����յ���Ţ���͵���èӹǹ�ҡ������ҷ��㹡�þѲ��: ���繵�ͧ���Ѿ�ҡ�㹡�þѲ�Ҷ֧�ͧ�к���袹ҹ�ѹ ��駡�èѴ����к������ż����Ҹ����ҵ� (NLP) ����Ѻ᪷�͵ ��С����¹�к� Frontend ����Ѻ Dashboard
+  [Heading 3] 2.6.3. ���Ŵ��ͼԴ��Ҵ������ҧ��������ʷҧ����Թ�ҹ�Ԩ�ª�鹹������֡�֧�������¹��ҹ���ԨԷ�� (Digital Transformation)
+  [Heading 3] 2.6.4. ����Է���Ҿ�ͧ�к��駫����͹�Ź�
+  [Normal (Web)] �����ѡɳ� 㨫��� ��Ф�� ����ʹͧҹ�Ԩ�¤�м���Ԩ����ӡ�����º��ºǧ������ (Cycle Time) [13]�ͧ��кǹ����駫�������к��ا�ѡ���Ҥ�� �����ҧ�к��Ѻ����ͧ��ҹ�͡��á�д�ɡѺ�к��駫����͹�Ź� (Online Maintenance Request System) �š���Ԩ�ª����������� �к��͹�Ź�����ö����������㹢�鹵͹����Ѻ����ͧ ���͹��ѵ� ��С�è��§ҹ����ҧ෤�Ԥ������¶֧ 3 �ѹ ���к�����ö�Դ���ʶҹ� (Status Tracking) ��Ẻ���������ʹ�:¡�дѺ�س�Ҿ�������ԡ�� (SLA Improvement): �ѭ�Ңͧ�١��ҹ���Ѻ���������ҧ�Ǵ����������к��ҡ��� ����Դ�ѭ������ͧ�Ѻ����������ͧ��º��¡�èѴ��â��������ҧ���к�: �к�����ö�纻���ѵԡ���駫����ͧ������ͧ�ش���͹����������������������Ҿ�ͧ�ػ�ó����������� (Predictive Maintenance)��ͨӡѴ:��û�Ѻ��Ǣͧ�ؤ�ҡ�: �͡�˹�ͨҡ�١��ҹ���� ���˹�ҷ���ҧ�Ҥ�����ͼ�黯Ժѵԧҹ��ԧ (Operation Level) ���繵�ͧ��Ѻ���㹡�������ҹ�ͻ���पѹ�����ѻവʶҹЧҹ ����Ҩ���ػ��ä㹪�ǧ�������
+  [Heading 3] 2.6.5. ����͡Ẻ�ͻ���पѹ����Ѻ����٧���� (Universal Design)
+  [Normal (Web)] �Ե�Ծ��� �������� ����ʹͧҹ�Ԩ������ͧ�Ԩ�¹�������ѭ�Ҥ������������ӷҧ�ԨԷ�� (Digital Divide) [14]㹡��������٧���� ����繡������Ъҡ÷�����������ѧ�����ѡ����� ����֡�Ҿ���ҡ��Ŵ�͹ͧ���Сͺ���á�ا�ѧ (Minimalist Design) ��â��¢�Ҵ����ѡ�� ��з���Ӥѭ��͡���� "�ͤ͹ (Iconography)" ������ͤ��������ԧ�ٻ���� (�� �ٻ����� �ٻ����) ᷹��������٢�ͤ�����ǹ� �Ъ��·���¡�ᾧ��������෤��������������������㹡����ҹ���Ѻ����٧���آ�ʹ�:��ͺ���������ء����êѹ (Inclusivity): ������ͻ���पѹ����ö�ͧ�Ѻ�������������� 100% ����駡��������٧�������ҧ��ѧŴ��ͼԴ��Ҵ㹡����ҹ (Reduce User Error): ˹�Ҩͷ��Ѵਹ��С�����ѭ�ѡɳ���»�ͧ�ѹ��á����ټԴ��Ҵ ���͡�÷Ӹ�á����Դ��Ҵ��ͨӡѴ:�ѡ�Ѳ�ҵ�ͧ�ӹ֧�֧��Ҥ������º��ҧ�ͧ�� (Color Contrast) �����ա����§������շ���׹�ѹ ���ͪ�������ͼ����ҹ����ջѭ�Ҵ�ҹ��µ�
+  [Heading 3] 2.6.6. ���ط����������ü�ҹ Push Notification
+  [Normal (Web)] �Ѱ�� ���๵� ����ʹͧҹ�Ԩ������ͧ�����������Է�ԼŢͧ�����������͹Ẻ�ت (Push Notification)[15] ����繡����������ԧ�ء (Proactive Communication) �觵ç�֧�����⿹�ͧ�١��ҹ ᷹��õԴ��С�ȷ����촻�Ъ�����ѹ�� �ҹ�Ԩ�¾���ҹ���͡��ط���Ӥѭ����˹�ҷ���� Call-to-Action �µç �������ö��е������Դ�ĵԡ�����ê��Ф����ǹ��ҧ����Ǵ���Ǣ�� ����觼�����ʹ��ä�ҧ���� (Overdue) Ŵŧ���ҧ�չ���Ӥѭ�֧ 25%��ʹ�:������Ҿ���ͧ�ҧ����Թ (Cash Flow): �ԵԺؤ�����Ѻ�Թ�����ǹ��ҧ�ç�����˹��ҡ��� ��仺����èѴ����ç���������дش����������Ǵ������еç�ش: ����ö������͹�˵ةء�Թ ���͢�������Ӥѭ����١��ҹ�Ѻ��Һ��ѹ��Ẻ��ºؤ�Ţ�ͨӡѴ:���Ф����˹������Ҩҡ�������͹ (Notification Fatigue): �ҡ�к���駤�ҡ������͹����Թ� �����觢�ͤ�������������Ǣ�ͧ �١��ҹ�Ҩ�Դ�����Ӥҭ������͡���лԴ�������͹ (Opt-out) ��觨з�����ͧ�ҧ���������ù���٭���»���Է���Ҿ价ѹ��
+  [Heading 3] 2.6.7. �ҵðҹ������ʹ��´��� JWT (JSON Web Token)
+  [Heading 3] 2.6.8 �к���Ǩ�ͺ��Ի�ѵ��ѵԼ�ҹ API
+  [Heading 1] ����� 3
+  [Heading 2] ����ͧ��ͷ����㹡�þѲ���к�
+  [Heading 3] 3.1.1. ��ǹ�����ż���ѧ��ҹ (Backend): �� Node.js ��� Express.js 㹡�����ҧ RESTful API �����Ѻ�觢�����
+  [Heading 3] 3.1.2. �к��Ѵ��ðҹ������ (Database): �� MySQL Database ����Ѻ�Ѵ�红������ԧ����ѹ�����դ����ʶ����٧
+  [Heading 3] 3.1.3. �к��׹�ѹ��ǵ�: �� JSON Web Token (JWT) ���ͤ�����ʹ���㹡����Ҷ֧��������ǹ�ؤ��
+  [Heading 2] ��鹵͹��ô��Թ�ҹ
+  [Heading 3] 3.2.1. �����������ѭ����Ф�����ͧ���: ŧ��鹷�����Ǩ�ѭ��������ҹ�ҭ��졹������ 12 ����ҵ�ͧ����к��������� ��Ǩ�ͺʶҹС���駫����� ��ШѴ��á���Թ�������
+  [Heading 3] 3.2.2. ����͡Ẻ�к� (System Design): �͡Ẻʶһѵ¡����������ѧ��ѹ����Թ��С�����������Ҵ��¡ѹ
+  [Heading 3] 3.2.3. ��þѲ������� (Implementation): ��¹������������ŷ���ҧἹ��� �� �к������Թ��ҹ QR Code ����к��Դ��������ǹ��ҧ
+  [Heading 3] 3.2.4 ��÷��ͺ��л����Թ��: ���ͺ��÷ӧҹ�����Ѻ�����������������Ѵ����Է���Ҿ��Ф����֧���
+  [Heading 2] 3.3 ����͡Ẻ��÷ӧҹ�ͧ�к�
+  [Heading 5] �ٻ�� 3.2 BPMN �ͧ�к�
+  [Heading 5] �ٻ�� 3.3 �к�����Թ�ͧ�ԵԺؤ��
+  [Heading 5] �ٻ�� 3.4 �к��Ѵ����١��ҹ�ͧ�ԵԺؤ��
+  [Heading 5] �ٻ�� 3.5 �к��������ا�ͧ�ԵԺؤ��
+  [Heading 5] �ٻ�� 3.6 �к�������âͧ�ԵԺؤ��
+  [Heading 5] �ٻ�� 3.7 �к��������ا�ͧ�١��ҹ
+  [Heading 5] �ٻ�� 3.8 �к���èѴ��ùԵԺ�ŤŢͧ������ú�����
+  [Heading 5] �ٻ�� 3.9 �к�͹��ѵԢͧ������ú�����
+  [Heading 5] �ٻ�� 3.10 �к��ٻ���ѵԢͧ������ú�����
+  [Heading 5] �ٻ�� 3.11 �к�������ǹ��ҧ�ͧ�١��ҹ
+  [Heading 5] �ٻ�� 3.12 �к��������ا�ͧ�١��ҹ
+  [Heading 5] �ٻ�� 3.13 �к�������âͧ�١��ҹ
+  [Heading 5] �ٻ�� 3.14 �к������Ţͧ�١��ҹ
+  [Heading 2] 3.4 ��á�˹����������ç���ҧ������ (Data Dictionary)
+  [Heading 4] ���ҧ��� 3.4.1 ���������Ѻ�к���С���������͹ (Announcement System)
+  [Heading 4] ���ҧ��� 3.4.2 ���������Ѻ�к�����Թ��С�ê����Թ (Payment & Financial)
+  [Heading 4] ���ҧ��� 3.4.3 ���������Ѻ�к��Ѵ��ü��������Է��� (User & Auth)
+  [Heading 2] 3.5 ����͡Ẻ��ǹ�Դ��ͻ���ҹ�ҹ�Ѻ�����
+  [Normal] �ҡ���������������͡Ẻ�к����� ���͡Ẻ GUI ˹�ҵ�ҧ�����ҹ���ͧ�鹢ͧ�ͻ���पѹ ���͡Ẻ GUI �����˹�ҵ�ҧ�����ҹ �ѧ���
+  [Heading 5] �ٻ�� 3.15 GUI ˹�ҵ�ҧ�����ҹ���ͧ�鹢ͧ�ͻ
+  [Heading 3] 3.5.1 ˹���������к� (Login)
+  [Normal] ��˹�ҵ�ҧ�á�ش������Դ�ͻ���पѹ ������Ѻ�׹�ѹ��ǵ����������ҹ�к� ��Сͺ���ª�ͧ��͡���ͼ����/�����, ��ͧ���ʼ�ҹ, �����������к�, ��л�������Ѻŧ����¹����
+  [Heading 5] �ٻ�� 3.16 ˹���������к� (Login)
+  [Heading 3] 3.5.2 ˹����ѡ (Home / Dashboard)
+  [Heading 5] �ٻ�� 3.17 ˹����ѡ (Home / Dashboard)
+  [Heading 3] 3.5.3 ˹��������١��ҹ (Profile)
+  [Normal] ˹�ҵ�ҧ����Ѻ�ʴ���ШѴ��â�������ǹ�ؤ�Ţͧ�١��ҹ �� ����-���ʡ��, �������Ѿ��, �����������´�ͧ��ҹ���ѡ�����
+  [Heading 5] �ٻ�� 3.18 ˹��������١��ҹ (Profile)
+  [Normal] �����Ţ 1 ���͡�ӹ�˹��
+  [Heading 3] 3.5.4 ˹�Ҫ��Ф����ǹ��ҧ (Payment)
+  [Normal] ˹�ҵ�ҧ����Ѻ���Թ��ê����Թ�����ǹ��ҧ �к����ʴ��ʹ����ͧ���Тͧ�ͺ�Ѩ�غѹ ���ҧ QR Code PromptPay �ѵ��ѵ�����᡹���� ����ջ�������Ѻ�ѻ��Ŵ��Ի��ѡ�ҹ����͹�Թ
+  [Heading 5] �ٻ�� 3.19 ˹�Ҫ��Ф����ǹ��ҧ (Payment)
+  [Heading 3] 3.5.5 ˹����������´��ê����Թ (Payment Detail)
+  [Heading 5] �ٻ�� 3.20 ˹����������´��ê����Թ (Payment Detail)
+  [Heading 3] 3.5.6 ˹�һ���ѵԡ�ê����Թ (Payment History)
+  [Heading 5] �ٻ�� 3.21 ˹�һ���ѵԡ�ê����Թ (Payment History)
+  [Heading 3] 3.5.7 ˹���駫��� (Repair)
+  [Heading 5] �ٻ�� 3.22 ˹���駫��� (Repair)
+  [Heading 3] 3.5.8 ˹��᪷�����ͧʹ��� (Chat)
+  [Normal] ˹�ҵ�ҧ����Ѻ�ٴ�����ͺ�Ѻ�ԵԺؤ�����ͷ���ҹ�ʹ�Թ�µç �����ͺ��������� ��ͧ���¹ �������˵�Ẻ��������
+  [Heading 5] �ٻ�� 3.23 ˹��᪷�����ͧʹ��� (Chat)
+  [Heading 3] 3.5.9 ˹�������éء�Թ (Call / Emergency)
+  [Heading 5] �ٻ�� 3.24 ˹�������éء�Թ (Call / Emergency)
+  [Heading 3] 3.5.10 ˹�ҨѴ����١��ҹ (User Management)
+  [Heading 5] �ٻ�� 3.25 ˹�ҨѴ����١��ҹ (User Management)
+  [Heading 3] 3.5.11 ˹�ҵ�Ǩ�ͺʶҹС�ê����Թ (Admin Payment Status)
+  [Normal] ˹�ҹ���ʹ�Թ������Ѻ�֧��������д���Ի��ѡ�ҹ����͹�Թ����١��ҹṺ����� ���͵�Ǩ�ͺ�����١��ͧ�ͧ�ʹ�Թ ��зӡ�á� "͹��ѵ�" ��¡��
+  [Heading 5] �ٻ�� 3.26 ˹�ҵ�Ǩ�ͺʶҹС�ê����Թ (Admin Payment Status)
+  [Heading 3] 3.5.12 ˹�ҨѴ��û�С�� (Announcement Admin)
+  [Heading 5] �ٻ�� 3.27 ˹�ҨѴ��û�С�� (Announcement Admin)
+  [Heading 3] 3.5.13 ˹������Ѻ-��¨��� (Financial Dashboard)
+  [Normal] ˹����§ҹ��������ʷҧ����Թ �ʴ���ػ�������Ф������¢ͧ�ç��� �����ٻẺ��ҿ���͢����ŵ���Ţ ��������ʹ�Թ��м����ŵ�Ǩ�ͺʶҹзҧ����Թ�ͧ�����ҹ��
+  [Heading 5] �ٻ�� 3.28 ˹������Ѻ-��¨��� (Financial Dashboard)
+  [Heading 3] 3.5.14 ˹�ҨѴ����дѺ�٧�ش (SuperAdmin Dashboard)
+  [Normal] ˹�ҤǺ����к��ԧ�֡����Ѻ���Ѵ��ùԵԺؤ�� ���ͼ������к��٧�ش ��Ѵ����Է���ͧ�ʹ�Թ���� ���������͹��ѵԤ���ͧ�ͤ�������¹�ŧ�����ŷҧ����Թ����Ӥѭ (�� ��¡�÷���͡��͹��ѵ�)
+  [Heading 5] �ٻ�� 3.29 ˹�ҨѴ����дѺ�٧�ش (SuperAdmin Dashboard)
+  [Heading 2] 3.6 ����͡Ẻ�ҹ������
+  [Heading 5] �ٻ�� 3.30 Ἱ�ѧ ER-diagram
+  [Heading 5] �ٻ�� 3.31 �Ҿ A Ἱ�ѧ ER-diagram �к���ѡ
+  [Heading 5] �ٻ�� 3.32 �Ҿ B Ἱ�ѧ ER-diagram �к�����Թ
+  [Heading 5] �ٻ�� 3.33 �Ҿ C Ἱ�ѧ ER-diagram �к��駫���
+  [Heading 5] �ٻ�� 3.34 �Ҿ D Ἱ�ѧ ER-diagram �к�᪷
+  [Heading 4] ���ҧ��� 1: �����źѭ�ռ����ҹ (accounts)
+  [Heading 4] ���ҧ��� 2: �����ź�ҹ (houses)
+  [Heading 4] ���ҧ��� 3: �������١��ҹ (residents)
+  [Heading 4] ���ҧ��� 4: ��������ػʶҹС�ê����Թ�ͧ��ҹ (payments)
+  [Heading 4] ���ҧ��� 5: �����ŧǴ��ê����Թ (payment_installments)
+  [Heading 4] ���ҧ��� 6: �����żŵ�Ǩ��Ի�ѵ��ѵ� (slipok_verifications)
+  [Heading 4] ���ҧ��� 7: �������ʹ PromptPay �ͧ�����ҹ (users)
+  [Heading 4] ���ҧ��� 8: �����Ť���������㹡�ê����Թ (payment_intents)
+  [Heading 4] ���ҧ��� 9: �����Ż�С�� (announcements)
+  [Heading 4] ���ҧ��� 10: �����ż��Դ��� (contacts)
+  [Heading 4] ���ҧ��� 11: �����š���駫��� (repairs)
+  [Heading 4] ���ҧ��� 12: �ٻ�Ҿ��Сͺ����駫��� (repair_photos)
+  [Heading 4] ���ҧ��� 13: ��������᪷ͧ (chat_rooms)
+  [Heading 4] ���ҧ��� 14: ��������Ҫԡ��᪷ͧ (chat_members)
+  [Normal] ���ҧ��� 15: �����Ţ�ͤ���᪷ (chat_messages)
+  [Heading 4] ���ҧ��� 16: �����š����ҹ᪷ (chat_room_reads)
+  [Heading 4] ���ҧ��� 17: �����š�ûѡ��ش��᪷ͧ��ǹ��� (chat_room_pins)
+  [Heading 4] ���ҧ��� 18: �����š�ûѡ��ش��᪷ͧ���ʹ�Թ (chat_room_admin_pins)
+  [Heading 4] ���ҧ��� 19: �����š�ûѡ��ش��ͤ��� (chat_message_pins)
+  [Heading 4] ���ҧ��� 20: �����š���ʴ���������֡�᪷ (chat_reactions)
+  [Heading 4] ���ҧ��� 21: �����š�õ�駤���к� (system_settings)
+  [Heading 4] ���ҧ��� 22: ����ѵԡ�èѴ��â������١��ҹ (resident_logs)
+  [Heading 4] ���ҧ��� 23: ����ѵԡ����䢢������駫��� (repair_edit_logs)
+  [Heading 4] ���ҧ��� 24: ����ѵԡ�èѴ��û�С�� (announcement_logs)
+  [Normal] �����˵�����Ѻ�������ٻ�����ç�ҹ (����� 4 ���� ����� 5):������ŨҡẺ�����Թ���й���Ҥ������� (Mean: $\bar{x}$) ��Ф����ǹ���§ູ�ҵðҹ (Standard Deviation: S.D.) ����ࡳ�����żŤ�ṹ����´ѧ���:
+  [Heading 1] ����� 4
+  [Normal] ��þѲ���к������èѴ��ùԵԺؤ�� (NitiSmart) ���Ѳ������ʹͼš�ô��Թ�ҹ ��觻�Сͺ���� 2 ��ǹ��ѡ ��� �Ţͧ��þѲ���к� ��мš�÷��ͺ�к� ����ҧ�ԧ�ҡ˹�Ҩ��ͻ���पѹ���Ѳ�Ҩ�ԧ������ ����������´�ѧ���仹��
+  [Heading 2] 4.1 �Ţͧ��þѲ���к�
+  [Normal] ���Ѳ�����͡Ẻ��оѲ���к� NitiSmart ����˹�Ҩ͡�÷ӧҹ�����ͧ�Ѻ�١��ҹ (Resident), �ԵԺؤ�� (Admin) ��С�����ú����� (SuperAdmin) �������������´˹�Ҩͷ����� 28 ˹�Ҩ� �ѧ���
+  [Normal] 1) ˹���������к�
+  [Heading 5] �ٻ��� 4.1 ˹�� login
+  [Heading 4] ���ҧ��� 4.1���������´��÷ӧҹ�ͧ˹���������к�
+  [Normal] 2) ˹�����������ҹ
+  [Heading 5] �ٻ��� 4.2 ˹�����������ҹ
+  [Heading 4] ���ҧ��� 4.2���������´��÷ӧҹ�ͧ˹�����������ҹ
+  [Normal] 4) ˹�ҡ�õ�駤���ͻ���पѹ
+  [Heading 4] ���ҧ��� 4.3���������´��÷ӧҹ�ͧ˹�ҡ�õ�駤���ͻ���पѹ
+  [Normal] 5) ˹����ѡ
+  [Heading 5] �ٻ��� 4.3 ˹����ѡ
+  [Heading 4] ���ҧ��� 4.4���������´��÷ӧҹ�ͧ˹����ѡ
+  [Normal] 8) ˹��ʶҹС�ê����Թ��§Ǵ
+  [Heading 5] �ٻ��� 4.4 ˹��ʶҹС�ê����Թ��§Ǵ
+  [Heading 4] ���ҧ��� 4.5���������´��÷ӧҹ�ͧ˹��ʶҹС�ê����Թ
+  [Normal] 9) ˹�Ҥ������������駪����Թ
+  [Heading 5] �ٻ��� 4.5 ˹�Ҥ������������駪����Թ
+  [Heading 4] ���ҧ��� 4.6���������´��÷ӧҹ�ͧ˹�Ҥ������������駪����Թ
+  [Normal] 10) ˹�һ���ѵԡ�ê����Թ��͹��ѧ
+  [Heading 5] �ٻ��� 4.6 ˹�һ���ѵԡ�ê����Թ��͹��ѧ
+  [Heading 4] ���ҧ��� 4.7���������´��÷ӧҹ�ͧ˹�һ���ѵԡ�ê����Թ
+  [Normal] 11) ˹���к��駫��� - �Ҿ�����¡��
+  [Heading 5] �ٻ��� 4.7 ˹���к��駫��� - �Ҿ�����¡��
+  [Heading 4] ���ҧ��� 4.8���������´��÷ӧҹ�ͧ˹���к��駫��� (�Ҿ�����¡��)
+  [Normal] 12) ˹���к��駫��� - Ẻ������駻ѭ��
+  [Heading 5] �ٻ��� 4.8 ˹��Ẻ������駫���
+  [Heading 4] ���ҧ��� 4.9���������´��÷ӧҹ�ͧ˹���к��駫��� (Ẻ������駻ѭ��)
+  [Normal] 13) ˹�������ª��͡��ʹ��� (ChatList)
+  [Heading 5] �ٻ��� 4.9 ˹�������ª��͡��ʹ���
+  [Heading 4] ���ҧ��� 4.10���������´��÷ӧҹ�ͧ˹�������ª��͡��ʹ���
+  [Normal] 14) ˹�ҵ�ҧʹ��� (ChatRoom)
+  [Heading 5] �ٻ��� 4.10 ˹�ҵ�ҧʹ���
+  [Heading 4] ���ҧ��� 4.11���������´��÷ӧҹ�ͧ˹�ҵ�ҧʹ���
+  [Normal] 15) ˹�������éء�Թ
+  [Heading 5] �ٻ��� 4.11 ˹�������éء�Թ
+  [Heading 4] ���ҧ��� 4.12���������´��÷ӧҹ�ͧ˹���к����Ѿ��
+  [Normal] 17) ˹�ҨѴ��â������١��ҹ
+  [Heading 5] �ٻ��� 4.12 ˹�ҨѴ��â������١��ҹ
+  [Heading 4] ���ҧ��� 4.13���������´��÷ӧҹ�ͧ˹�ҨѴ��â������١��ҹ
+  [Normal] 18) ˹������Ѻ - ��¨���
+  [Heading 5] �ٻ��� 4.13 ˹������Ѻ - ��¨���
+  [Heading 4] ���ҧ��� 4.14���������´��÷ӧҹ�ͧ˹�ҨѴ��á���Թ��ҧ
+  [Normal] 19) ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Heading 5] �ٻ��� 4.14 ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Heading 4] ���ҧ��� 4.15���������´��÷ӧҹ�ͧ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Normal] 20) ˹�ҨѴ��úѭ�ռ������к�
+  [Heading 5] �ٻ��� 4.15 ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Normal] �ٻ��� 4.12 ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Heading 4] ���ҧ��� 4.16���������´��÷ӧҹ�ͧ˹�ҨѴ��úѭ�ռ������к�
+  [Normal] 21) ˹�ҡ��͹��ѵ�
+  [Heading 5] �ٻ��� 4.16 ˹�ҨѴ��úѭ�ռ������к�
+  [Heading 4] ���ҧ��� 4.17���������´��÷ӧҹ�ͧ˹�ҡ��͹��ѵ��дѺ�٧
+  [Normal] 22) ˹�Һѹ�֡����ѵԨѴ��ê����Թ
+  [Heading 5] �ٻ��� 4.17 ˹�Һѹ�֡����ѵԨѴ��ê����Թ
+  [Heading 4] ���ҧ��� 4.18���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԨѴ��ê����Թ
+  [Normal] 23) ˹�Һѹ�֡����ѵԡ���駫���
+  [Heading 5] �ٻ��� 4.18 ˹�Һѹ�֡����ѵԡ���駫���
+  [Heading 4] ���ҧ��� 4.19���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԡ���駫���
+  [Normal] 24) ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ
+  [Heading 5] �ٻ��� 4.19 ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ
+  [Heading 4] ���ҧ��� 4.20���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ
+  [Normal] 25) ˹�Һѹ�֡����ѵԨѴ��û�С��
+  [Heading 5] �ٻ��� 4.20 ˹�Һѹ�֡����ѵԨѴ��û�С��
+  [Heading 4] ���ҧ��� 4.21���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԨѴ��û�С��
+  [Normal] 28) ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ
+  [Heading 5] �ٻ��� 4.21 ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ
+  [Heading 4] ���ҧ��� 4.22���������´��÷ӧҹ�ͧ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ
+  [Heading 2] 4.2 �Ţͧ��÷��ͺ�����١��ͧ�ͧ�ԧ����С�ùӷҧ (Link & Navigation Testing)
+  [Normal] ��÷��ͺ�����١��ͧ�ͧ�ԧ����С������¹˹�Ҩ� (Navigation) �������ǹ�Ӥѭ����������ͻ���पѹ�դ����ʶ��� �����觼š�÷��ͺ�͡��������ǹ��÷ӧҹ �ѧ���
+  [Heading 4] ���ҧ��� 4.23����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�ѭ�ռ�������˹����ѡ
+  [Heading 4] ���ҧ��� 4.24����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ��ê����Թ����к��駫���
+  [Heading 4] ���ҧ��� 4.25����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�к�᪷����ʹ�Թ�ԵԺؤ��
+  [Heading 4] ���ҧ��� 4.26����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�к���ѧ��ҹ (SuperAdmin)
+  [Normal] ��ػ�š�÷��ͺ�����١��ͧ�ͧ�ԧ��:��ҡ��ô��Թ��÷��ͺ�����١��ͧ�ͧ�ԧ��㹷ء��ǹ�ͧ����ͻ���पѹ (Mobile App) NitiSmart ����� ���������§�ԧ�� �����Ҷ֧˹�ҵ�ҧ��÷ӧҹ ��пѧ��ѹ��ùӷҧ (Navigation) ��ҧ� �����Ѿ����仵�����Ҵ��ѧ㹴�ҹ�����١��ͧ ����ö��Ѻ˹�Ҩ���������ҧ����� ��辺�ԧ������ (Broken Links) �������ջѭ���ͻ���पѹ��ҧ�ҡ�������¹˹��
+  [Heading 2] 
+  [Heading 2] 4.3 �š�÷��ͺ�������Ѻ�ͧ�����ҹ (UAT)
+  [Heading 4] ���ҧ��� 4.27��ѹ�֡��÷��ͺ�������Ѻ�ͧ�����ҹ (UAT) ���駷�� 1 16/4/��69
+  [Heading 4] ���ҧ��� 4.28�ࡳ���õѴ�Թ��÷��ͺ
+  [Heading 4] ���ҧ��� 4.29���ػ�š�÷��ͺ�������Ѻ�ͧ�����ҹ
+  [Heading 2] 4.4 �š�û����Թ����Է���Ҿ��Ф����֧���
+  [Heading 4] ���ҧ��� 4.30��š�û����Թ��ҹ��÷ӧҹ����ѧ��ѹ�ͧ�к� (Functional Requirement Test)
+  [Heading 4] ���ҧ��� 4.31��š�û����Թ��ҹ����Է���Ҿ��÷ӧҹ (Performance Test)
+  [Heading 2] ���ҧ��� 4.32��š�û����Թ��ҹ����͡Ẻ��Ф�������㹡����ҹ (Usability Test)
+  [Heading 2] ���ҧ��� 4.33��š�û����Թ��ҹ������蹤���ʹ��¢ͧ������ (Security Test)
+  [Heading 1] ����� 5
+  [Heading 2] 5.1 ��ػ�š�ô��Թ�ҹ (Conclusion)
+  [Heading 3] 5.1.1. �к��Ѵ��â������١��ҹ��м����ҹ:�����ö�ѹ�֡ ��� ������Է�������ҹ�����ҧ�١��ҹ (User) ��йԵԺؤ�� (Admin) �����ҧ�١��ͧ��л�ʹ���
+  [Heading 3] 5.1.2 �к�����Թ��Ф����ǹ��ҧ:��١��ҹ����ö��Ǩ�ͺ�ʹ��ҧ���� ��Ъ����Թ��ҹ����᡹ QR Code (PromptPay) �� ���к�����ö�֧�����Ũҡ��Ի�͹�Թ (e-Slip) �ҵ�Ǩ�ͺ�����١��ͧ��ҹ API �ͧ SlipOK ����ѻവʶҹС�ê����Թ����ѵ��ѵ� ��ͧ�ѹ�ѭ�ҡ������Ի����������Ի���
+  [Heading 3] 5.1.3. �к��駫���:��١��ҹ����ö�駻ѭ�� �駫��� �����Ṻ�Ҿ���� �¹ԵԺؤ������ö�Դ�������ѻവʶҹС�ë����������ҧ���к�
+  [Heading 3] 5.1.4. �к���С�Ȣ������:��ԵԺؤ������ö��Ш�¢��������лѡ��ش��С���Ӥѭ ��������١��ҹ�Ѻ��Һ�����������ҧ�Ǵ���Ǽ�ҹ�ͻ���पѹ
+  [Heading 3] 5.1.5. �к�ʹ��� (Chat System):��١��ҹ��йԵԺؤ������ö�Դ���������áѹ��Ẻ Real-time �ͧ�Ѻ����觢�ͤ�������ٻ�Ҿ ����Ŵ��ͧ��ҧ㹡���������
+  [Heading 2] ��Ի��¼� (Discussion)
+  [Normal] �ҡ�š�û����Թ����Է���Ҿ��Ф����֧��㨢ͧ�����ҹ㹺���� 4 ����Ҽ����ҹ�դ����֧�����Ҿ����дѺ����ҡ�(�������� 4.60 ����) ������ö��Ի��¼���ѧ���
+  [Heading 3] 5.2.1. ��ҹ������蹤���ʹ��¢ͧ������:����Ѻ��ṹ�����Թ�٧�ش ���ͧ�ҡ�к��ա���¡�дѺ�Է�������ҹ�Ѵਹ ����к���ê����Թ�ա�кǹ��õ�Ǩ�ͺ��Ի (SlipOK Verification) ����ͧ�ѹ��÷ب�Ե�����ҧ�ջ���Է���Ҿ ���������ҹ�դ����������㹡�÷Ӹ�á����ҧ����Թ��ҹ�ͻ���पѹ
+  [Heading 3] 5.2.2. ��ҹ����͡Ẻ��Ф�������㹡����ҹ (UX/UI):������ҹ�֧�����ٻẺ˹�Ҩͷ��ѹ���� ��ҹ���� ����բ�鹵͹�����ҹ������Ѻ��͹ �� ��è����Թ�������ö�Ө����������鹵͹
+  [Heading 3] 5.2.3. ��ҹ����Է���Ҿ��÷ӧҹ:��к�᪷ Real-time ���Ѳ�Ҵ��� Socket.io ����ö�觢�ͤ������Ǵ��������ʶ��� ����֧��õ�Ǩ�ͺ��Ի�ѵ��ѵԷ��ӧҹ������� ����Ŵ���Тͧ�ԵԺؤ��㹡���ҹ�觵�Ǩ�ͺ��Ի����������ҧ�ҡ
+  [Heading 2] 5.3 �ѭ������ػ��ä (Problems and Obstacles)
+  [Heading 3] 5.3.1. ����������͡Ѻ API ��¹͡:�������á�ͧ��þѲ�� ����������͡Ѻ API �ͧ SlipOK ���͵�Ǩ�ͺ��Ի�͹�Թ�ջѭ������ͧ�ٻẺ������ (JSON Format) ������ͧ�������֡�Ҥ�������л�Ѻ�������ʹ֧�����Ÿ�Ҥ����Шӹǹ�Թ�ҵ�Ǩ�ͺ���١��ͧ
+  [Heading 3] 5.3.2. ��èѴ���ʶҹ�Ẻ Real-time:���þѲ���к�᪷����к��ѻവʶҹС���駫���Ẻ�ѹ�� (Real-time) ��ͧ��������Ѵ���ѧ㹡�èѴ������������ Socket.io �����������ͻ���पѹ�Դ����˹�ǧ������ռ����ҹ������ѹ���¤�
+  [Heading 3] 5.3.3. ������ҡ���¢ͧ˹�Ҩ������⿹:�����͡Ẻ UI ����ͧ�Ѻ˹�Ҩ������⿹����բ�Ҵ����Ѵ��ǹᵡ��ҧ�ѹ (Responsive Design) �� React Native ��ͧ�����һ�Ѻ���������ͧ���Сͺ��ҧ� �ʴ�������§�����ء�ػ�ó�
+  [Heading 2] 5.4 ����ʹ������͡�þѲ�ҵ���ʹ (Recommendations for Future Work)
+  [Heading 3] 5.4.1. �к�����͹��ҹ Push Notification:���������к� Push Notification (�� �� Firebase Cloud Messaging) ��������͹������բ�ͤ���᪷���� �ջ�С�ȴ�ǹ �������֧��˹����Ф����ǹ��ҧ ���������Դ�ͻ���पѹ��ҧ���
+  [Heading 3] 5.4.2. �к��᡹���·���¹ö���ͺѵ�����͡ (Access Control):��Ѳ���к��������͡Ѻ���ͧǧ�ûԴ���������˹�������ҹ �����ӹ�¤����дǡ㹡�����-�͡�ͧ�١��ҹ��м���ҵԴ��� (Visitor Management)
+  [Heading 3] 5.4.3. Dashboard ��� Export ������:�����˹�� Dashboard ����Ѻ�ԵԺؤ��㹡�ô�ʶԵ�����Ѻ-��¨��¢ͧ�����ҹ��ٻẺ��ҿ �������ö Export ��������§ҹ�ҧ����Թ�͡������� Excel ���� PDF ���͹�价Ӻѭ����ػ�ʹ��Шӻ�����¢��
+  [Normal] ��óҹء��
+
+
+### FIGURE & TABLE CAPTIONS ###
+
+  [Heading 4] ���ҧ��� 1.2 ������ҳ�����㹡�èѴ���ç�ҹ
+  [Heading 4] ���ҧ��� 3.4.1 ���������Ѻ�к���С���������͹ (Announcement System)
+  [Heading 4] ���ҧ��� 3.4.2 ���������Ѻ�к�����Թ��С�ê����Թ (Payment & Financial)
+  [Heading 4] ���ҧ��� 3.4.3 ���������Ѻ�к��Ѵ��ü��������Է��� (User & Auth)
+  [Heading 4] ���ҧ��� 1: �����źѭ�ռ����ҹ (accounts)
+  [Heading 4] ���ҧ��� 2: �����ź�ҹ (houses)
+  [Heading 4] ���ҧ��� 3: �������١��ҹ (residents)
+  [Heading 4] ���ҧ��� 4: ��������ػʶҹС�ê����Թ�ͧ��ҹ (payments)
+  [Heading 4] ���ҧ��� 5: �����ŧǴ��ê����Թ (payment_installments)
+  [Heading 4] ���ҧ��� 6: �����żŵ�Ǩ��Ի�ѵ��ѵ� (slipok_verifications)
+  [Heading 4] ���ҧ��� 7: �������ʹ PromptPay �ͧ�����ҹ (users)
+  [Heading 4] ���ҧ��� 8: �����Ť���������㹡�ê����Թ (payment_intents)
+  [Heading 4] ���ҧ��� 9: �����Ż�С�� (announcements)
+  [Heading 4] ���ҧ��� 10: �����ż��Դ��� (contacts)
+  [Heading 4] ���ҧ��� 11: �����š���駫��� (repairs)
+  [Heading 4] ���ҧ��� 12: �ٻ�Ҿ��Сͺ����駫��� (repair_photos)
+  [Heading 4] ���ҧ��� 13: ��������᪷ͧ (chat_rooms)
+  [Heading 4] ���ҧ��� 14: ��������Ҫԡ��᪷ͧ (chat_members)
+  [Normal] ���ҧ��� 15: �����Ţ�ͤ���᪷ (chat_messages)
+  [Heading 4] ���ҧ��� 16: �����š����ҹ᪷ (chat_room_reads)
+  [Heading 4] ���ҧ��� 17: �����š�ûѡ��ش��᪷ͧ��ǹ��� (chat_room_pins)
+  [Heading 4] ���ҧ��� 18: �����š�ûѡ��ش��᪷ͧ���ʹ�Թ (chat_room_admin_pins)
+  [Heading 4] ���ҧ��� 19: �����š�ûѡ��ش��ͤ��� (chat_message_pins)
+  [Heading 4] ���ҧ��� 20: �����š���ʴ���������֡�᪷ (chat_reactions)
+  [Heading 4] ���ҧ��� 21: �����š�õ�駤���к� (system_settings)
+  [Heading 4] ���ҧ��� 22: ����ѵԡ�èѴ��â������١��ҹ (resident_logs)
+  [Heading 4] ���ҧ��� 23: ����ѵԡ����䢢������駫��� (repair_edit_logs)
+  [Heading 4] ���ҧ��� 24: ����ѵԡ�èѴ��û�С�� (announcement_logs)
+  [Heading 5] �ٻ��� 4.1 ˹�� login
+  [Heading 4] ���ҧ��� 4.1���������´��÷ӧҹ�ͧ˹���������к�
+  [Heading 5] �ٻ��� 4.2 ˹�����������ҹ
+  [Heading 4] ���ҧ��� 4.2���������´��÷ӧҹ�ͧ˹�����������ҹ
+  [Heading 4] ���ҧ��� 4.3���������´��÷ӧҹ�ͧ˹�ҡ�õ�駤���ͻ���पѹ
+  [Heading 5] �ٻ��� 4.3 ˹����ѡ
+  [Heading 4] ���ҧ��� 4.4���������´��÷ӧҹ�ͧ˹����ѡ
+  [Heading 5] �ٻ��� 4.4 ˹��ʶҹС�ê����Թ��§Ǵ
+  [Heading 4] ���ҧ��� 4.5���������´��÷ӧҹ�ͧ˹��ʶҹС�ê����Թ
+  [Heading 5] �ٻ��� 4.5 ˹�Ҥ������������駪����Թ
+  [Heading 4] ���ҧ��� 4.6���������´��÷ӧҹ�ͧ˹�Ҥ������������駪����Թ
+  [Heading 5] �ٻ��� 4.6 ˹�һ���ѵԡ�ê����Թ��͹��ѧ
+  [Heading 4] ���ҧ��� 4.7���������´��÷ӧҹ�ͧ˹�һ���ѵԡ�ê����Թ
+  [Heading 5] �ٻ��� 4.7 ˹���к��駫��� - �Ҿ�����¡��
+  [Heading 4] ���ҧ��� 4.8���������´��÷ӧҹ�ͧ˹���к��駫��� (�Ҿ�����¡��)
+  [Heading 5] �ٻ��� 4.8 ˹��Ẻ������駫���
+  [Heading 4] ���ҧ��� 4.9���������´��÷ӧҹ�ͧ˹���к��駫��� (Ẻ������駻ѭ��)
+  [Heading 5] �ٻ��� 4.9 ˹�������ª��͡��ʹ���
+  [Heading 4] ���ҧ��� 4.10���������´��÷ӧҹ�ͧ˹�������ª��͡��ʹ���
+  [Heading 5] �ٻ��� 4.10 ˹�ҵ�ҧʹ���
+  [Heading 4] ���ҧ��� 4.11���������´��÷ӧҹ�ͧ˹�ҵ�ҧʹ���
+  [Heading 5] �ٻ��� 4.11 ˹�������éء�Թ
+  [Heading 4] ���ҧ��� 4.12���������´��÷ӧҹ�ͧ˹���к����Ѿ��
+  [Heading 5] �ٻ��� 4.12 ˹�ҨѴ��â������١��ҹ
+  [Heading 4] ���ҧ��� 4.13���������´��÷ӧҹ�ͧ˹�ҨѴ��â������١��ҹ
+  [Heading 5] �ٻ��� 4.13 ˹������Ѻ - ��¨���
+  [Heading 4] ���ҧ��� 4.14���������´��÷ӧҹ�ͧ˹�ҨѴ��á���Թ��ҧ
+  [Heading 5] �ٻ��� 4.14 ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Heading 4] ���ҧ��� 4.15���������´��÷ӧҹ�ͧ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Heading 5] �ٻ��� 4.15 ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Normal] �ٻ��� 4.12 ˹��ᴪ���촫ػ�����ʹ�Թ
+  [Heading 4] ���ҧ��� 4.16���������´��÷ӧҹ�ͧ˹�ҨѴ��úѭ�ռ������к�
+  [Heading 5] �ٻ��� 4.16 ˹�ҨѴ��úѭ�ռ������к�
+  [Heading 4] ���ҧ��� 4.17���������´��÷ӧҹ�ͧ˹�ҡ��͹��ѵ��дѺ�٧
+  [Heading 5] �ٻ��� 4.17 ˹�Һѹ�֡����ѵԨѴ��ê����Թ
+  [Heading 4] ���ҧ��� 4.18���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԨѴ��ê����Թ
+  [Heading 5] �ٻ��� 4.18 ˹�Һѹ�֡����ѵԡ���駫���
+  [Heading 4] ���ҧ��� 4.19���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԡ���駫���
+  [Heading 5] �ٻ��� 4.19 ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ
+  [Heading 4] ���ҧ��� 4.20���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԡ�èѴ����١��ҹ
+  [Heading 5] �ٻ��� 4.20 ˹�Һѹ�֡����ѵԨѴ��û�С��
+  [Heading 4] ���ҧ��� 4.21���������´��÷ӧҹ�ͧ˹�Һѹ�֡����ѵԨѴ��û�С��
+  [Heading 5] �ٻ��� 4.21 ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ
+  [Heading 4] ���ҧ��� 4.22���������´��÷ӧҹ�ͧ˹�ҡ�õ�駤���дѺ�ػ�����ʹ�Թ
+  [Heading 4] ���ҧ��� 4.23����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�ѭ�ռ�������˹����ѡ
+  [Heading 4] ���ҧ��� 4.24����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ��ê����Թ����к��駫���
+  [Heading 4] ���ҧ��� 4.25����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�к�᪷����ʹ�Թ�ԵԺؤ��
+  [Heading 4] ���ҧ��� 4.26����ҧ��§ҹ���ͺ�����١��ͧ�ͧ�ԧ�� ��ǹ�к���ѧ��ҹ (SuperAdmin)
+  [Heading 4] ���ҧ��� 4.27��ѹ�֡��÷��ͺ�������Ѻ�ͧ�����ҹ (UAT) ���駷�� 1 16/4/��69
+  [Heading 4] ���ҧ��� 4.28�ࡳ���õѴ�Թ��÷��ͺ
+  [Heading 4] ���ҧ��� 4.29���ػ�š�÷��ͺ�������Ѻ�ͧ�����ҹ
+  [Heading 4] ���ҧ��� 4.30��š�û����Թ��ҹ��÷ӧҹ����ѧ��ѹ�ͧ�к� (Functional Requirement Test)
+  [Heading 4] ���ҧ��� 4.31��š�û����Թ��ҹ����Է���Ҿ��÷ӧҹ (Performance Test)
+  [Heading 2] ���ҧ��� 4.32��š�û����Թ��ҹ����͡Ẻ��Ф�������㹡����ҹ (Usability Test)
+  [Heading 2] ���ҧ��� 4.33��š�û����Թ��ҹ������蹤���ʹ��¢ͧ������ (Security Test)
+
+
+### SECTIONS / PAGES ###
+
+Section 0: width=7560310, height=10692130
+Section 1: width=7560310, height=10692130
+Section 2: width=7560310, height=10692130
+Section 3: width=7560310, height=10692130
+Section 4: width=7560310, height=10692130
+Section 5: width=7560310, height=10692130
+Section 6: width=7560310, height=10692130
+Section 7: width=7560310, height=10692130
+Section 8: width=7560310, height=10692130
+Section 9: width=7560310, height=10692130

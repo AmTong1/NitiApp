@@ -369,8 +369,8 @@ function registerRepairRoutes(app) {
 
       const sql = `
         SELECT r.id, r.user_id, r.title, r.detail, r.house_number, r.status,
-           DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-           DATE_FORMAT(r.done_at, '%Y-%m-%d %H:%i:%s') AS done_at,
+           r.created_at,
+           r.done_at,
                a.username AS reporter_username,
                a.full_name AS reporter_fullname
         FROM repairs r
@@ -436,7 +436,7 @@ function registerRepairRoutes(app) {
           el.performed_by,
           el.performed_by_name,
           el.performed_by_role,
-          DATE_FORMAT(el.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+          el.created_at,
           r.title AS repair_title,
           r.house_number AS repair_house_number
         FROM repair_edit_logs el
@@ -476,7 +476,7 @@ function registerRepairRoutes(app) {
           dl.repair_status,
           dl.deleted_by,
           dl.delete_reason,
-          DATE_FORMAT(dl.deleted_at, '%Y-%m-%d %H:%i:%s') AS deleted_at,
+          dl.deleted_at,
           a.username as deleted_by_username,
           a.full_name as deleted_by_fullname,
           a.role as deleted_by_role,

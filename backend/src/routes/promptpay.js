@@ -18,6 +18,7 @@ const multer = require('multer');
 const fs = require('fs-extra');
 const path = require('path');
 const { regenerateInstallmentsForPayment } = require('./payments');
+const { getDiscountForCycle, applyDiscountToAmount } = require('./discount');
 // Configure Multer
 const uploadDir = path.join(__dirname, '../../uploads/proofs');
 fs.ensureDirSync(uploadDir);
@@ -233,7 +234,12 @@ async function ensureNextYearInstallments(paymentId, app) {
   }
 
   const count = 12 / months;
-  const amountPerInstallment = Number(p.amount_per_month || 0) * months;
+  const baseAmountPerInstallment = Number(p.amount_per_month || 0) * months;
+
+  // Apply discount if configured for this cycle
+  const discount = await getDiscountForCycle(months);
+  const amountPerInstallment = discount ? applyDiscountToAmount(baseAmountPerInstallment, discount) : baseAmountPerInstallment;
+  const discountAmt = discount ? Math.round((baseAmountPerInstallment - amountPerInstallment) * 100) / 100 : 0;
   const currentMaxNo = Number(stat.max_no || 0);
 
   const valuesArray = [];
@@ -248,6 +254,8 @@ async function ensureNextYearInstallments(paymentId, app) {
       months,
       toPostgresDateTime(due),
       amountPerInstallment,
+      baseAmountPerInstallment,
+      discountAmt,
       'pending',
       null,
       toPostgresDate(periodStart),
@@ -256,7 +264,7 @@ async function ensureNextYearInstallments(paymentId, app) {
   }
 
   if (valuesArray.length) {
-    const columns = ['payment_id', 'house_number', 'installment_no', 'months_span', 'due_date', 'amount', 'status', 'paid_at', 'period_start', 'period_end'];
+    const columns = ['payment_id', 'house_number', 'installment_no', 'months_span', 'due_date', 'amount', 'original_amount', 'discount_amount', 'status', 'paid_at', 'period_start', 'period_end'];
     const { sql, params } = buildBatchInsert('payment_installments', columns, valuesArray);
     await pool.query(sql, params);
   }
@@ -884,9 +892,9 @@ function registerPromptPayRoutes(app) {
 
       const sql = `
          SELECT pi.id, pi.payment_id, pi.house_number, pi.installment_no, pi.months_span, 
-           DATE_FORMAT(pi.due_date, '%Y-%m-%d %H:%i:%s') AS due_date,
+           pi.due_date,
            pi.amount, pi.status,
-           DATE_FORMAT(pi.paid_at, '%Y-%m-%d %H:%i:%s') AS paid_at,
+           pi.paid_at,
            pi.paid_method, pi.paid_note, pi.proof_image, pi.paid_by,
            COALESCE(NULLIF(acc_approved.username, ''), NULLIF(acc_approved.full_name, ''), pi.approved_by) AS approved_by
         FROM payment_installments pi
@@ -920,9 +928,9 @@ function registerPromptPayRoutes(app) {
            WHERE house_number IS NOT NULL AND TRIM(house_number) <> ''
          )
          SELECT pi.id, pi.payment_id, pi.house_number, pi.installment_no, pi.months_span, 
-            DATE_FORMAT(pi.due_date, '%Y-%m-%d %H:%i:%s') AS due_date,
+            pi.due_date,
             pi.amount, pi.status,
-            DATE_FORMAT(pi.paid_at, '%Y-%m-%d %H:%i:%s') AS paid_at,
+            pi.paid_at,
             pi.paid_method, pi.paid_note, pi.proof_image, pi.paid_by, pi.approved_by
          FROM payment_installments pi
          INNER JOIN active_houses ah ON ah.house_number = pi.house_number

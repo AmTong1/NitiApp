@@ -56,7 +56,7 @@ async function indexExists(table, indexName) {
 }
 
 // ✅ เพิ่มคอลัมน์ pay_months ถ้ายังไม่มี
-async function ensureResidentsTable() {
+async function ensureResidentsTable() { try {
   if (!(await hasDb())) return false;
   await pool.query(`CREATE TABLE IF NOT EXISTS residents (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -76,15 +76,14 @@ async function ensureResidentsTable() {
   if (!(await columnExists('residents', 'phone'))) {
     await pool.query(`ALTER TABLE residents ADD COLUMN phone VARCHAR(32) NULL`);
   }
-  // เพิ่ม unique index
-  try {
-    if (!(await indexExists('residents', 'uniq_residents_phone'))) {
-      await pool.query(`CREATE UNIQUE INDEX uniq_residents_phone ON residents (phone)`);
-    }
-  } catch (e) {
-    console.warn('ensureResidentsTable: phone unique index', e.message);
+  if (!(await columnExists('residents', 'deletion_status'))) {
+    await pool.query(`ALTER TABLE residents ADD COLUMN deletion_status VARCHAR(32) NOT NULL DEFAULT 'active'`);
+  }
+  if (!(await columnExists('residents', 'deleted_at'))) {
+    await pool.query(`ALTER TABLE residents ADD COLUMN deleted_at TIMESTAMP NULL`);
   }
   return true;
+} catch(e) { console.warn('ensureResidentsTable error:', e.message); return false; }
 }
 
 async function ensureHousesTable() {
@@ -452,6 +451,7 @@ function registerResidentRoutes(app) {
         }
         // Keep one row per house_number in MySQL
         where.push('r.id = (SELECT r2.id FROM residents r2 WHERE r2.house_number = r.house_number ORDER BY r2.id DESC LIMIT 1)');
+        where.push('r.deletion_status != "deleted"');
         const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
         const [rows] = await pool.query(
           `SELECT r.id, r.house_number, r.title, r.first_name, r.last_name, r.phone,
@@ -797,6 +797,7 @@ function registerResidentRoutes(app) {
     }
   });
 
+  
   // Delete
   app.delete('/residents/:id', authGuard, adminOnly, async (req, res) => {
     const id = Number(req.params.id);
@@ -806,25 +807,22 @@ function registerResidentRoutes(app) {
         const [rows] = await pool.query('SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = ? LIMIT 1', [id]);
         const deleted = rows[0];
         const hn = deleted?.house_number ? String(deleted.house_number) : null;
+        if (!deleted) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
 
-        const client = await pool.getClient();
-        try {
-          await client.query('BEGIN');
-          await client.query('DELETE FROM residents WHERE id = ?', [id]);
-          if (hn) {
-            // Delete house; payments has FK ON DELETE CASCADE
-            await client.query('DELETE FROM houses WHERE house_number = ?', [hn]);
-          }
-          await client.query('COMMIT');
-        } catch (e) {
-          await client.query('ROLLBACK');
-          throw e;
-        } finally {
-          client.release();
-        }
-
-        // Log delete
-        if (deleted) {
+        const role = req.user?.role;
+        if (role === 'admin') {
+          await pool.query('UPDATE residents SET deletion_status = "pending_deletion" WHERE id = ?', [id]);
+          await insertResidentLog('request_delete', {
+            residentId: id,
+            houseNumber: hn,
+            residentName: [deleted.title, deleted.first_name, deleted.last_name].filter(Boolean).join(' '),
+            changes: { action: { old: 'active', new: 'pending_deletion' } },
+            user: req.user,
+          });
+          return res.json({ ok: true, status: 'pending_approval' });
+        } else if (role === 'superadmin') {
+          // Soft delete resident
+          await pool.query('UPDATE residents SET deletion_status = "deleted", deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
           await insertResidentLog('delete', {
             residentId: id,
             houseNumber: hn,
@@ -841,9 +839,10 @@ function registerResidentRoutes(app) {
             },
             user: req.user,
           });
+          return res.json({ ok: true, status: 'deleted' });
+        } else {
+          return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
         }
-
-        return res.json({ ok: true, house_deleted: !!hn });
       } catch (e) {
         console.error('DELETE /residents/:id DB error:', e);
         return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
@@ -855,7 +854,89 @@ function registerResidentRoutes(app) {
     }
   });
 
+  // Approvals waiting list for superadmin
+  app.get('/residents/waiting-approval', authGuard, async (req, res) => {
+    if (req.user?.role !== 'superadmin') return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
+    try {
+      await ensureResidentsTable();
+      const [rows] = await pool.query('SELECT * FROM residents WHERE deletion_status = "pending_deletion" ORDER BY id DESC');
+      return res.json({ ok: true, data: rows });
+    } catch (e) {
+      console.error('GET /residents/waiting-approval error:', e);
+      return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+    }
+  });
+
+  // Approve or Reject resident deletion
+  app.patch('/residents/:id/deletion-status', authGuard, async (req, res) => {
+    if (req.user?.role !== 'superadmin') return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
+    const id = Number(req.params.id);
+    const { status } = req.body;
+    try {
+      await ensureResidentsTable();
+      const [rows] = await pool.query('SELECT * FROM residents WHERE id = ? LIMIT 1', [id]);
+      const resident = rows[0];
+      if (!resident) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+
+      if (status === 'approved') {
+        await pool.query('UPDATE residents SET deletion_status = "deleted", deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+        await insertResidentLog('delete', {
+          residentId: id,
+          houseNumber: resident.house_number,
+          residentName: [resident.title, resident.first_name, resident.last_name].filter(Boolean).join(' '),
+          changes: { house_number: resident.house_number, first_name: resident.first_name, last_name: resident.last_name },
+          user: req.user,
+        });
+      } else if (status === 'rejected') {
+        await pool.query('UPDATE residents SET deletion_status = "active", deleted_at = NULL WHERE id = ?', [id]);
+        await insertResidentLog('reject_delete', {
+          residentId: id,
+          houseNumber: resident.house_number,
+          residentName: [resident.title, resident.first_name, resident.last_name].filter(Boolean).join(' '),
+          changes: { action: { old: 'pending_deletion', new: 'active' } },
+          user: req.user,
+        });
+      }
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('PATCH /residents/:id/deletion-status error:', e);
+      return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+    }
+  });
+
+  // Restore deleted resident (within 30 days)
+  app.post('/residents/:id/restore', authGuard, async (req, res) => {
+    if (req.user?.role !== 'superadmin') return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
+    const id = Number(req.params.id);
+    try {
+      await ensureResidentsTable();
+      const [rows] = await pool.query('SELECT deleted_at, house_number, title, first_name, last_name FROM residents WHERE id = ? AND deletion_status = "deleted" LIMIT 1', [id]);
+      const resident = rows[0];
+      if (!resident) return res.status(404).json({ ok: false, error: 'NOT_FOUND_OR_NOT_DELETED' });
+
+      if (resident.deleted_at) {
+        const deletedAt = new Date(resident.deleted_at).getTime();
+        const days = (Date.now() - deletedAt) / (1000 * 60 * 60 * 24);
+        if (days > 30) return res.status(400).json({ ok: false, error: 'EXPIRED_30_DAYS' });
+      }
+
+      await pool.query('UPDATE residents SET deletion_status = "active", deleted_at = NULL WHERE id = ?', [id]);
+      await insertResidentLog('restore', {
+        residentId: id,
+        houseNumber: resident.house_number,
+        residentName: [resident.title, resident.first_name, resident.last_name].filter(Boolean).join(' '),
+        changes: { action: { old: 'deleted', new: 'active' } },
+        user: req.user,
+      });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('POST /residents/:id/restore error:', e);
+      return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+    }
+  });
+
   // GET /houses - ดึงรายการบ้านเลขที่ทั้งหมด (สำหรับ dropdown)
+
   app.get('/houses', authGuard, async (req, res) => {
     try {
       await ensureHousesTable();
@@ -922,8 +1003,11 @@ function registerResidentRoutes(app) {
            rl.performed_by,
            rl.performed_by_name,
            rl.performed_by_role,
-           DATE_FORMAT(rl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-         FROM resident_logs rl ${whereSql} ORDER BY rl.created_at DESC LIMIT ? OFFSET ?`,
+           rl.created_at,
+           r.deletion_status AS current_resident_status
+         FROM resident_logs rl
+         LEFT JOIN residents r ON r.id = rl.resident_id
+         ${whereSql} ORDER BY rl.created_at DESC LIMIT ? OFFSET ?`,
         [...params, limit + 1, offset]
       );
       const hasMore = rows.length > limit;

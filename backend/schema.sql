@@ -340,3 +340,39 @@ CREATE TABLE IF NOT EXISTS announcement_logs (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_announcement_logs_created (created_at)
 );
+
+-- ========= Discount Configs (active discount per cycle, max 3) =========
+CREATE TABLE IF NOT EXISTS discount_configs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  cycle_months INT NOT NULL,
+  discount_type ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage',
+  discount_value DECIMAL(12,2) NOT NULL DEFAULT 0,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_by BIGINT NULL,
+  UNIQUE KEY uq_dc_cycle (cycle_months),
+  INDEX idx_dc_enabled (enabled)
+);
+
+-- ========= Discount Requests (approval workflow + history log) =========
+CREATE TABLE IF NOT EXISTS discount_requests (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  action ENUM('create', 'update', 'delete') NOT NULL,
+  cycle_months INT NOT NULL,
+  discount_type ENUM('percentage', 'fixed') NULL,
+  discount_value DECIMAL(12,2) NULL,
+  old_discount_type ENUM('percentage', 'fixed') NULL,
+  old_discount_value DECIMAL(12,2) NULL,
+  requested_by BIGINT NOT NULL,
+  requested_by_name VARCHAR(255) NULL,
+  requested_by_role VARCHAR(32) NULL,
+  status ENUM('approved', 'waiting_approval', 'rejected') NOT NULL DEFAULT 'waiting_approval',
+  approved_by BIGINT NULL,
+  approved_by_name VARCHAR(255) NULL,
+  approved_at TIMESTAMP NULL,
+  reject_reason VARCHAR(500) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_dr_status (status),
+  INDEX idx_dr_cycle (cycle_months),
+  INDEX idx_dr_created (created_at)
+);

@@ -260,17 +260,27 @@ function registerFinancialRoutes(app) {
       const [rows] = await pool.query(sql);
       const income = Number(rows[0]?.total_income || 0);
       const expense = Number(rows[0]?.total_expense || 0);
-      const balance = income - expense;
 
-      // Only return balance if admin
+      // Calculate all-time balance regardless of filter
+      const sqlAllTime = `
+        SELECT 
+          SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
+          SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense
+        FROM (
+          ${unifiedTransactionsSql}
+        ) as t
+        WHERE status IN ('approved', 'waiting_delete')
+      `;
+      const [allTimeRows] = await pool.query(sqlAllTime);
+      const allTimeIncome = Number(allTimeRows[0]?.total_income || 0);
+      const allTimeExpense = Number(allTimeRows[0]?.total_expense || 0);
+      const balance = allTimeIncome - allTimeExpense;
+
       const summary = {
         total_income: income,
         total_expense: expense,
+        balance: balance
       };
-      
-      if (isAdmin) {
-        summary.balance = balance;
-      }
 
       return res.json({ ok: true, data: summary });
     } catch (e) {
@@ -443,27 +453,57 @@ function registerFinancialRoutes(app) {
 
       const [rows] = await pool.query(sql);
 
-      // Create CSV header
-      let csvContent = '\uFEFF'; // BOM for UTF-8
-      csvContent += 'วันที่,ประเภท,รายการ,จำนวนเงิน (บาท),แหล่งที่มา\n';
-      const lines = [];
+      // Create HTML-based Excel content
+      let htmlContent = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style>
+  th { background-color: #f3f4f6; font-weight: bold; border: 1px solid #ccc; padding: 5px; }
+  td { border: 1px solid #ccc; padding: 5px; }
+  .income { color: #10B981; }
+  .expense { color: #EF4444; }
+</style>
+</head>
+<body>
+  <table>
+    <tr>
+      <th>วันที่</th>
+      <th>ประเภท</th>
+      <th>รายการ</th>
+      <th>จำนวนเงิน (บาท)</th>
+      <th>แหล่งที่มา</th>
+    </tr>`;
 
       for (const row of rows) {
         const d = new Date(row.date);
         const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth()+1).toString().padStart(2, '0')}/${d.getFullYear()+543} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
         
-        let typeStr = row.type === 'income' ? 'รายรับ' : 'รายจ่าย';
-        let amountStr = Number(row.amount).toFixed(2);
-        let titleStr = '"' + (row.title || '').replace(/"/g, '""') + '"';
-        let sourceStr = row.source === 'installment' ? 'ระบบค่างวด' : 'บันทึกเอง';
+        const isIncome = row.type === 'income';
+        const typeStr = isIncome ? 'รายรับ' : 'รายจ่าย';
+        const amountStr = (isIncome ? '+' : '-') + Number(row.amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const titleStr = (row.title || '');
+        const sourceStr = row.source === 'installment' ? 'ระบบค่างวด' : 'บันทึกเอง';
+        const colorClass = isIncome ? 'income' : 'expense';
 
-        lines.push(`${dateStr},${typeStr},${titleStr},${amountStr},${sourceStr}`);
+        htmlContent += `
+    <tr>
+      <td>${dateStr}</td>
+      <td class="${colorClass}">${typeStr}</td>
+      <td>${titleStr}</td>
+      <td class="${colorClass}">${amountStr}</td>
+      <td>${sourceStr}</td>
+    </tr>`;
       }
 
-      const csv = csvContent + lines.join('\n');
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="financial_export.csv"');
-      return res.send(csv);
+      htmlContent += `
+  </table>
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="financial_export.xls"');
+      return res.send(htmlContent);
     } catch (e) {
       console.error('GET /financial/export error:', e);
       return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });

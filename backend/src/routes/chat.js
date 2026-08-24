@@ -43,10 +43,10 @@ const CHAT_ALLOW = new Set([
   'image/jpeg','image/png','image/webp','image/gif',
   'application/pdf',
   'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/x-excel', 'application/x-msexcel', 'application/excel',
   'application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'video/mp4','video/quicktime','video/x-msvideo','video/x-ms-wmv','video/webm','video/3gpp','video/x-matroska',
-  'text/plain'
+  'text/plain', 'text/csv', 'application/csv', 'text/comma-separated-values', 'text/html'
 ]);
 const CHAT_MAX_FILE_SIZE_MB = (() => {
   const raw = Number(process.env.CHAT_MAX_FILE_SIZE_MB);
@@ -57,14 +57,28 @@ const uploadChat = multer({
   storage: chatStorage,
   limits: { fileSize: CHAT_MAX_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
-    CHAT_ALLOW.has(file.mimetype) ? cb(null, true) : cb(new Error('FILE_TYPE_NOT_ALLOWED'));
+    if (CHAT_ALLOW.has(file.mimetype)) return cb(null, true);
+    if (file.mimetype === 'application/octet-stream') {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      if (['.doc', '.docx', '.xls', '.xlsx', '.csv', '.ppt', '.pptx', '.txt', '.pdf'].includes(ext)) {
+        return cb(null, true);
+      }
+    }
+    cb(new Error('FILE_TYPE_NOT_ALLOWED'));
   }
 });
 const uploadImagesMulti = multer({
   storage: chatStorage,
   limits: { fileSize: CHAT_MAX_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
-    CHAT_ALLOW.has(file.mimetype) ? cb(null, true) : cb(new Error('FILE_TYPE_NOT_ALLOWED'));
+    if (CHAT_ALLOW.has(file.mimetype)) return cb(null, true);
+    if (file.mimetype === 'application/octet-stream') {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      if (['.doc', '.docx', '.xls', '.xlsx', '.csv', '.ppt', '.pptx', '.txt', '.pdf'].includes(ext)) {
+        return cb(null, true);
+      }
+    }
+    cb(new Error('FILE_TYPE_NOT_ALLOWED'));
   }
 }).array('files', 15);
 

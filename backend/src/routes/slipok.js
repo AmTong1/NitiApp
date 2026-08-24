@@ -84,15 +84,12 @@ function compactRef(value) {
 }
 
 function formatThaiDate(input) {
-  const d = input ? new Date(input) : new Date();
-  const dt = Number.isNaN(d.getTime()) ? new Date() : d;
-  const pad = (n) => String(n).padStart(2, '0');
-  const thaiMonths = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
-  ];
-  const buddhistYear = dt.getFullYear() + 543;
-  return `${dt.getDate()} ${thaiMonths[dt.getMonth()]} ${buddhistYear} - ${pad(dt.getHours())}:${pad(dt.getMinutes())} น.`;
+  const dt = input ? new Date(input) : new Date();
+  if (Number.isNaN(dt.getTime())) return formatThaiDate(new Date());
+  
+  const d = dt.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: 'numeric' });
+  const t = dt.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${d} - ${t} น.`;
 }
 
 function buildBankSlipSvg({
@@ -116,7 +113,7 @@ function buildBankSlipSvg({
   const refText = compactRef(reference || receiptNo);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+<svg width="1000" height="1480" viewBox="0 0 1000 1480" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
       <feFlood flood-color="#000000" flood-opacity="0.08" result="flood"/>
@@ -130,59 +127,56 @@ function buildBankSlipSvg({
     </filter>
   </defs>
 
-  <!-- Background -->
-  <rect width="1080" height="1920" fill="#f0f2f5"/>
-
   <!-- Card -->
-  <rect x="80" y="260" width="920" height="1380" rx="38" fill="#FFFFFF" filter="url(#shadow)"/>
+  <rect x="40" y="40" width="920" height="1380" rx="38" fill="#FFFFFF" filter="url(#shadow)"/>
 
   <!-- Header Stripe -->
-  <rect x="80" y="260" width="920" height="30" rx="38" fill="#003399"/>
-  <rect x="80" y="275" width="920" height="15" fill="#003399"/>
+  <rect x="40" y="40" width="920" height="30" rx="38" fill="#003399"/>
+  <rect x="40" y="55" width="920" height="15" fill="#003399"/>
 
   <!-- Header Info -->
-  <text x="152" y="380" font-family="Tahoma, sans-serif" font-size="48" font-weight="bold" fill="#003399">Payment</text>
-  <text x="928" y="380" font-family="Tahoma, sans-serif" font-size="34" font-weight="bold" fill="#1a8a3a" text-anchor="end">ทำรายการสำเร็จ</text>
+  <text x="112" y="160" font-family="Tahoma, sans-serif" font-size="48" font-weight="bold" fill="#003399">Payment</text>
+  <text x="888" y="160" font-family="Tahoma, sans-serif" font-size="34" font-weight="bold" fill="#1a8a3a" text-anchor="end">ทำรายการสำเร็จ</text>
 
   <!-- Time Label -->
-  <text x="152" y="450" font-family="Tahoma, sans-serif" font-size="32" fill="#6b6b6b">${escapeXml(dateText)}</text>
+  <text x="112" y="230" font-family="Tahoma, sans-serif" font-size="32" fill="#6b6b6b">${escapeXml(dateText)}</text>
 
   <!-- Info Container Line -->
-  <line x1="176" y1="530" x2="176" y2="850" stroke="#eeeeee" stroke-width="5"/>
+  <line x1="136" y1="310" x2="136" y2="630" stroke="#eeeeee" stroke-width="5"/>
 
   <!-- Node 1: From -->
-  <circle cx="176" cy="530" r="14" fill="#003399"/>
-  <circle cx="176" cy="530" r="18" fill="none" stroke="#003399" stroke-width="3"/>
-  <text x="224" y="520" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">จาก</text>
-  <text x="224" y="570" font-family="Tahoma, sans-serif" font-size="38" font-weight="bold" fill="#2b2b2b">${escapeXml(payerText)}</text>
-  <text x="224" y="615" font-family="Tahoma, sans-serif" font-size="34" fill="#6b6b6b">${escapeXml(senderBankText)}</text>
+  <circle cx="136" cy="310" r="14" fill="#003399"/>
+  <circle cx="136" cy="310" r="18" fill="none" stroke="#003399" stroke-width="3"/>
+  <text x="184" y="300" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">จาก</text>
+  <text x="184" y="350" font-family="Tahoma, sans-serif" font-size="38" font-weight="bold" fill="#2b2b2b">${escapeXml(payerText)}</text>
+  <text x="184" y="395" font-family="Tahoma, sans-serif" font-size="34" fill="#6b6b6b">${escapeXml(senderBankText)}</text>
 
   <!-- Address Highlight -->
-  <rect x="224" y="640" width="680" height="120" rx="19" fill="#f8faff"/>
-  <rect x="224" y="640" width="10" height="120" rx="10" fill="#003399"/>
-  <rect x="229" y="640" width="5" height="120" fill="#003399"/>
-  <text x="260" y="685" font-family="Tahoma, sans-serif" font-size="28" font-weight="bold" fill="#003399">บ้านเลขที่</text>
-  <text x="260" y="735" font-family="Tahoma, sans-serif" font-size="36" font-weight="bold" fill="#2b2b2b">${escapeXml(houseText)}</text>
+  <rect x="184" y="420" width="680" height="120" rx="19" fill="#f8faff"/>
+  <rect x="184" y="420" width="10" height="120" rx="10" fill="#003399"/>
+  <rect x="189" y="420" width="5" height="120" fill="#003399"/>
+  <text x="220" y="465" font-family="Tahoma, sans-serif" font-size="28" font-weight="bold" fill="#003399">บ้านเลขที่</text>
+  <text x="220" y="515" font-family="Tahoma, sans-serif" font-size="36" font-weight="bold" fill="#2b2b2b">${escapeXml(houseText)}</text>
 
   <!-- Node 2: To -->
-  <circle cx="176" cy="850" r="14" fill="#003399"/>
-  <circle cx="176" cy="850" r="18" fill="none" stroke="#003399" stroke-width="3"/>
-  <text x="224" y="840" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">ไปยัง</text>
-  <text x="224" y="890" font-family="Tahoma, sans-serif" font-size="38" font-weight="bold" fill="#2b2b2b">${escapeXml(receiverText)}</text>
-  <text x="224" y="935" font-family="Tahoma, sans-serif" font-size="34" fill="#6b6b6b">PromptPay ${escapeXml(promptPayMasked)}</text>
+  <circle cx="136" cy="630" r="14" fill="#003399"/>
+  <circle cx="136" cy="630" r="18" fill="none" stroke="#003399" stroke-width="3"/>
+  <text x="184" y="620" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">ไปยัง</text>
+  <text x="184" y="670" font-family="Tahoma, sans-serif" font-size="38" font-weight="bold" fill="#2b2b2b">${escapeXml(receiverText)}</text>
+  <text x="184" y="715" font-family="Tahoma, sans-serif" font-size="34" fill="#6b6b6b">PromptPay ${escapeXml(promptPayMasked)}</text>
 
   <!-- Amount Container -->
-  <line x1="152" y1="1020" x2="928" y2="1020" stroke="#dddddd" stroke-dasharray="10, 10" stroke-width="3"/>
-  <text x="540" y="1100" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b" text-anchor="middle">จำนวนเงิน (บาท)</text>
-  <text x="540" y="1190" font-family="Tahoma, sans-serif" font-size="86" font-weight="bold" fill="#003399" text-anchor="middle">${escapeXml(amountText)}</text>
-  <text x="540" y="1250" font-family="Tahoma, sans-serif" font-size="34" fill="#6b6b6b" text-anchor="middle">ค่าธรรมเนียม: 0.00</text>
+  <line x1="112" y1="800" x2="888" y2="800" stroke="#dddddd" stroke-dasharray="10, 10" stroke-width="3"/>
+  <text x="500" y="880" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b" text-anchor="middle">จำนวนเงิน (บาท)</text>
+  <text x="500" y="970" font-family="Tahoma, sans-serif" font-size="86" font-weight="bold" fill="#003399" text-anchor="middle">${escapeXml(amountText)}</text>
+  <text x="500" y="1030" font-family="Tahoma, sans-serif" font-size="34" fill="#6b6b6b" text-anchor="middle">ค่าธรรมเนียม: 0.00</text>
 
   <!-- Footer Ref -->
-  <line x1="152" y1="1330" x2="928" y2="1330" stroke="#f0f0f0" stroke-width="3"/>
-  <text x="152" y="1400" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">เลขที่อ้างอิง: ${escapeXml(refText)}</text>
-  <text x="152" y="1450" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">ใบเสร็จ: ${escapeXml(receiptNo)}</text>
-  <text x="152" y="1500" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">โอนเงิน PromptPay</text>
-  <text x="152" y="1560" font-family="Tahoma, sans-serif" font-size="28" font-weight="bold" fill="#ff6600">ตรวจสอบความถูกต้องได้ที่แอปฯ ธนาคาร</text>
+  <line x1="112" y1="1110" x2="888" y2="1110" stroke="#f0f0f0" stroke-width="3"/>
+  <text x="112" y="1180" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">เลขที่อ้างอิง: ${escapeXml(refText)}</text>
+  <text x="112" y="1230" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">ใบเสร็จ: ${escapeXml(receiptNo)}</text>
+  <text x="112" y="1280" font-family="Tahoma, sans-serif" font-size="28" fill="#6b6b6b">โอนเงิน PromptPay</text>
+  <text x="112" y="1340" font-family="Tahoma, sans-serif" font-size="28" font-weight="bold" fill="#ff6600">ตรวจสอบความถูกต้องได้ที่แอปฯ ธนาคาร</text>
 
 </svg>`;
 }

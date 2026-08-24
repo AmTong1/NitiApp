@@ -1,0 +1,1 @@
+const mysql = require('mysql2/promise'); mysql.createConnection({host:'tanutchapol.trueddns.com', port:47332, user:'root', password:'Myproj', database:'MyPJ'}).then(c => c.query('SELECT r.id FROM residents r WHERE r.deletion_status != ''deleted'' LIMIT 1').then(r => console.log('success:', r[0])).catch(e => console.error('DB ERROR:', e.message)).finally(() => c.end()));
