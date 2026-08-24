@@ -1,1 +1,0 @@
-{"ok":false,"code":"SLIP_PROVIDER_AUTH_FAILED","message":"ตั้งค่า Slip2Go ไม่ถูกต้อง กรุณาตรวจสอบ API Secret","provider":{"message":"Token Mismatch.","code":"401001"}}
