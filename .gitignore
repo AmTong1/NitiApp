@@ -35,5 +35,9 @@ Thumbs.db
 *.njsproj
 *.sln
 *.swp
-# Separated Apps
-MyApp/
+# React Native build artifacts
+MyApp/android/app/build/
+MyApp/android/.gradle/
+MyApp/ios/build/
+MyApp/ios/Pods/
+MyApp/.metro-health-check*
