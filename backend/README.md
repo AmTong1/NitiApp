@@ -1,135 +1,269 @@
-Backend (modularized)
+# 🖥️ NitiSmart Backend API
 
-Structure
-- src/config: Environment and paths
-- src/db: MySQL pool
-- src/middleware: Auth middlewares
-- src/routes: Feature routes grouped by domain
-- src/socket: Socket.IO setup
-- src/utils: Reusable helpers (QR, DB utils, misc)
-- server.js: Thin entrypoint wiring HTTP + Socket.IO
+> REST API + WebSocket สำหรับระบบบริหารจัดการนิติบุคคล
 
-Key routes
-- Auth: /auth/register, /auth/login, /auth/me, /profile
-- Slip2Go: POST /upload-and-check (upload + compress + Slip2Go check)
-- PromptPay: GET /promptpay-qr, GET /promptpay-qr/user/:userId
-- Payments:
-  - GET /payments/status?year=YYYY&month=1-12&q=123
-  - GET /payments/history/:houseNumber
-  - POST /payments/record
-- Admin: /admin/users, /admin/users/:userId/amount, /admin/users/:userId/amount/add, /admin/users/:userId
-- Contacts: CRUD under /contacts
-- Repairs: CRUD under /repairs (+ /repairs/:id/image, generic POST /upload)
-- Chat: public room, DM ensure, messages, file uploads, and admin DM list under /chat/*
+---
 
-Prerequisites
-- Node.js 18+
-- MySQL (matching env in .env). The API can run in limited mock mode if DB is not reachable for some endpoints.
-- .env in backend/ with at least:
-HOST=localhost
-PORT=5000
+## 📁 โครงสร้างโฟลเดอร์
+
+```
+backend/
+├── server.js                # Entry point (HTTP + Socket.IO)
+├── schema.sql               # Database schema ทั้งหมด
+├── Dockerfile               # Docker image config
+├── docker-compose.yml       # Docker Compose config
+├── receipt-template.html    # Template ใบเสร็จ PDF
+│
+└── src/
+    ├── config/
+    │   ├── env.js            # โหลด environment variables
+    │   └── paths.js          # กำหนด path สำหรับ uploads, QR, PDF
+    │
+    ├── db/
+    │   ├── pool.js           # MySQL connection pool
+    │   └── initDb.js         # สร้าง database/tables อัตโนมัติ
+    │
+    ├── middleware/
+    │   └── auth.js           # JWT authentication + role check
+    │
+    ├── routes/
+    │   ├── auth.js           # ลงทะเบียน, เข้าสู่ระบบ, โปรไฟล์
+    │   ├── residents.js      # จัดการลูกบ้าน (CRUD)
+    │   ├── payments.js       # สถานะการชำระ, ประวัติ, บันทึกการจ่าย
+    │   ├── promptpay.js      # สร้าง QR PromptPay
+    │   ├── slipok.js         # ตรวจสลิป (Slip2Go / SlipOK)
+    │   ├── announcements.js  # ประกาศข่าวสาร
+    │   ├── repairs.js        # แจ้งซ่อม + แนบรูป
+    │   ├── chat.js           # แชทเรียลไทม์ (ห้อง, ข้อความ, ไฟล์)
+    │   ├── contacts.js       # เบอร์ติดต่อฉุกเฉิน
+    │   ├── admin.js          # จัดการแอดมิน
+    │   ├── discount.js       # ตั้งค่าส่วนลดรายรอบ
+    │   ├── financial.js      # รายงานการเงิน
+    │   ├── settings.js       # ตั้งค่าระบบ (SuperAdmin)
+    │   └── pdf.js            # ออกใบเสร็จ PDF
+    │
+    ├── socket/
+    │   └── index.js          # Socket.IO event handlers
+    │
+    └── utils/
+        ├── crypto.js         # เข้ารหัส/ถอดรหัสข้อมูล
+        ├── db.js             # Database helper functions
+        ├── docPreview.js     # แปลงเอกสารเป็นรูปภาพ
+        ├── misc.js           # Utility ทั่วไป
+        ├── pgHelper.js       # PostgreSQL compatibility helpers
+        └── qr.js             # สร้าง QR Code
+```
+
+---
+
+## 📌 ข้อกำหนดเบื้องต้น
+
+- **Node.js** 18 ขึ้นไป
+- **MySQL** 8.0+ (หรือ MariaDB 10.6+)
+- ไฟล์ `.env` ในโฟลเดอร์ `backend/`
+
+---
+
+## ⚙️ ตั้งค่า Environment Variables
+
+สร้างไฟล์ `.env` ในโฟลเดอร์ `backend/`:
+
+```env
+# เซิร์ฟเวอร์
+HOST=0.0.0.0
+PORT=5419
+
+# ฐานข้อมูล MySQL
 DB_HOST=localhost
+DB_PORT=3306
 DB_USER=root
-DB_PASS=pass
-DB_NAME=mydb
-JWT_SECRET=supersecret
-JWT_EXPIRES=7d
-ADMIN_KEY=your-admin-key
-SLIP2GO_API=https://api.slip2go.com
-SLIP2GO_SECRET=your-slip2go-secret
+DB_PASS=your_password
+DB_NAME=MyPJ
 
-# Backward compatibility (optional)
+# JWT Authentication
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRES=7d
+
+# Admin Key (ใช้ตอนสร้าง Super Admin)
+ADMIN_KEY=your_admin_key
+
+# PromptPay
+PROMPTPAY_ID=0xxxxxxxxx
+PROMPTPAY_DEFAULT_AMOUNT=199.00
+
+# ตรวจสลิป (เลือกอย่างใดอย่างหนึ่ง)
+SLIP2GO_API=https://api.slip2go.com
+SLIP2GO_SECRET=your_secret
+
+# (ทางเลือก) SlipOK Legacy
 SLIPOK_API=
 SLIPOK_KEY=
-PROMPTPAY_ID=0812345678
-PROMPTPAY_DEFAULT_AMOUNT=0
-QR_RETENTION_DAYS=3
+
+# Puppeteer (สำหรับออกใบเสร็จ PDF)
 PUPPETEER_HEADLESS=new
-
-Run
-- From project root: `npm run start --prefix backend`
-- Or `cd backend && npm start`
-
-Docker (Backend + MySQL)
-- From project root:
-  - `cd backend`
-  - `docker compose up --build -d`
-- Check logs:
-  - `docker compose logs -f backend`
-- API base URL:
-  - `http://localhost:5000`
-- Stop containers:
-  - `docker compose down`
-- Stop and remove MySQL volume data:
-  - `docker compose down -v`
-
-Notes for Docker
-- MySQL host for backend is `db` (service name), not `localhost`.
-- Host machine MySQL port is mapped to `3307`.
-- Edit `JWT_SECRET`, `ADMIN_KEY`, and database passwords in `docker-compose.yml` before exposing outside local development.
-
-Notes
-- Static files are served from: /uploads, /qrs, /pdfs
-- QR images and PDFs are cleaned up periodically (QR based on retention days).
-- Socket.IO uses Authorization: Bearer <token> in handshake headers.
-
-SQL (Payments)
-If DB is available the API will auto-create tables on first use. Manual DDL:
-
-```
-CREATE TABLE IF NOT EXISTS houses (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  house_number VARCHAR(32) NOT NULL UNIQUE,
-  owner_name VARCHAR(128) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS payments (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  house_id INT NOT NULL,
-  paid_date DATE NOT NULL,
-  amount DECIMAL(10,2) NOT NULL,
-  status ENUM('success','overdue','processing') NOT NULL DEFAULT 'processing',
-  method ENUM('qr','cash','bank') NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_pay_house FOREIGN KEY (house_id) REFERENCES houses(id) ON DELETE CASCADE,
-  INDEX idx_pay_house_month (house_id, paid_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+QR_RETENTION_DAYS=3
 ```
 
-Residents endpoints
-- GET /residents?q=...
-- POST /residents (auth + adminOnly)
-- PUT /residents/:id (auth + adminOnly)
-- DELETE /residents/:id (auth + adminOnly)
-- POST /residents/register (auth + adminOnly) — สร้างผู้พักอาศัยพร้อมบัญชีเข้าใช้งาน (username/password)
+---
 
-SQL (Residents)
-```sql
-CREATE TABLE IF NOT EXISTS residents (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  house_number VARCHAR(32) NOT NULL UNIQUE,
-  title VARCHAR(16) NULL,
-  first_name VARCHAR(128) NOT NULL,
-  last_name VARCHAR(128) NULL,
-  phone VARCHAR(32) NULL,
-  household_count INT NOT NULL DEFAULT 1,
-  car_count INT NOT NULL DEFAULT 0,
-  account_id BIGINT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_resident_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+## 🚀 วิธีรัน
+
+### รันแบบปกติ
+
+```bash
+cd backend
+npm install
+npm start
 ```
 
-Accounts table (ถ้ายังไม่มี ระบบจะสร้างอัตโนมัติเมื่อเรียก /residents/register)
-```sql
-CREATE TABLE IF NOT EXISTS accounts (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  username VARCHAR(64) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  full_name VARCHAR(255) NULL,
-  role ENUM('user','admin') NOT NULL DEFAULT 'user',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+เซิร์ฟเวอร์จะเริ่มที่ `http://localhost:5419`
+
+### รันด้วย Docker
+
+```bash
+cd backend
+docker compose up --build -d
 ```
+
+| คำสั่ง | คำอธิบาย |
+|--------|----------|
+| `docker compose up --build -d` | สร้างและรัน container |
+| `docker compose logs -f backend` | ดู log แบบ realtime |
+| `docker compose down` | หยุด container |
+| `docker compose down -v` | หยุดและลบ volume data |
+
+> **หมายเหตุ Docker:** แก้ไข `JWT_SECRET`, `ADMIN_KEY` และรหัสผ่าน DB ใน `docker-compose.yml` ก่อนใช้งานจริง
+
+---
+
+## 🗄️ ฐานข้อมูล
+
+ระบบจะ**สร้างฐานข้อมูลและตารางอัตโนมัติ**ตอนรันครั้งแรก (`initDatabase`) หากต้องการสร้างเอง:
+
+```bash
+mysql -u root -p < schema.sql
+```
+
+ดูรายละเอียด schema ทั้งหมดได้ที่ไฟล์ `schema.sql`
+
+---
+
+## 📡 API Endpoints หลัก
+
+### 🔐 Authentication (`/auth`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| POST | `/auth/register` | สมัครสมาชิก | - |
+| POST | `/auth/login` | เข้าสู่ระบบ | - |
+| GET | `/auth/me` | ดูข้อมูลตัวเอง | 🔒 User |
+| PUT | `/profile` | แก้ไขโปรไฟล์ | 🔒 User |
+
+### 🏠 ลูกบ้าน (`/residents`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/residents?q=...` | ค้นหาลูกบ้าน | 🔒 User |
+| POST | `/residents` | เพิ่มลูกบ้าน | 🔒 Admin |
+| PUT | `/residents/:id` | แก้ไขลูกบ้าน | 🔒 Admin |
+| DELETE | `/residents/:id` | ลบลูกบ้าน | 🔒 Admin |
+| POST | `/residents/register` | สร้างลูกบ้านพร้อมบัญชี (username/password) | 🔒 Admin |
+
+### 💰 การชำระเงิน (`/payments`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/payments/status?year=&month=&q=` | สถานะการชำระรายเดือน | 🔒 User |
+| GET | `/payments/history/:houseNumber` | ประวัติการชำระของบ้าน | 🔒 User |
+| POST | `/payments/record` | บันทึกการชำระ | 🔒 Admin |
+
+### 💳 PromptPay (`/promptpay-qr`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/promptpay-qr` | สร้าง QR Code PromptPay | 🔒 User |
+| GET | `/promptpay-qr/user/:userId` | สร้าง QR ตามยอดของ user | 🔒 User |
+
+### 🧾 ตรวจสลิป (`/upload-and-check`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| POST | `/upload-and-check` | อัปโหลดสลิป + ตรวจอัตโนมัติ | 🔒 User |
+
+### 📢 ประกาศ (`/announcements`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/announcements` | ดูประกาศทั้งหมด | 🔒 User |
+| POST | `/announcements` | สร้างประกาศ | 🔒 Admin |
+| PUT | `/announcements/:id` | แก้ไขประกาศ | 🔒 Admin |
+| DELETE | `/announcements/:id` | ลบประกาศ | 🔒 Admin |
+
+### 🔧 แจ้งซ่อม (`/repairs`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/repairs` | ดูรายการแจ้งซ่อม | 🔒 User |
+| POST | `/repairs` | แจ้งซ่อมใหม่ | 🔒 User |
+| PUT | `/repairs/:id` | แก้ไข/อัปเดตสถานะ | 🔒 Admin |
+| POST | `/repairs/:id/image` | แนบรูปภาพ | 🔒 User |
+
+### 💬 แชท (`/chat`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/chat/rooms` | ดูรายการห้องแชท | 🔒 User |
+| POST | `/chat/rooms` | สร้างห้องแชท | 🔒 User |
+| GET | `/chat/rooms/:id/messages` | ดูข้อความในห้อง | 🔒 User |
+| POST | `/chat/rooms/:id/messages` | ส่งข้อความ | 🔒 User |
+| POST | `/chat/rooms/:id/upload` | ส่งไฟล์/รูปภาพ | 🔒 User |
+
+### 📞 เบอร์ติดต่อ (`/contacts`)
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/contacts` | ดูเบอร์ติดต่อ | 🔒 User |
+| POST | `/contacts` | เพิ่มเบอร์ | 🔒 Admin |
+| PUT | `/contacts/:id` | แก้ไข | 🔒 Admin |
+| DELETE | `/contacts/:id` | ลบ | 🔒 Admin |
+
+### 🛡️ Admin / SuperAdmin
+| Method | Endpoint | คำอธิบาย | สิทธิ์ |
+|--------|----------|----------|--------|
+| GET | `/admin/users` | ดูรายการ user ทั้งหมด | 🔒 Admin |
+| PUT | `/admin/users/:id` | แก้ไข user | 🔒 SuperAdmin |
+| POST | `/discount` | ตั้งค่าส่วนลด | 🔒 Admin |
+| GET | `/settings` | ดูการตั้งค่าระบบ | 🔒 SuperAdmin |
+| PUT | `/settings` | แก้ไขการตั้งค่า | 🔒 SuperAdmin |
+
+---
+
+## 🔌 WebSocket (Socket.IO)
+
+เชื่อมต่อด้วย:
+
+```javascript
+const socket = io('http://localhost:5419', {
+  auth: { token: 'Bearer <JWT_TOKEN>' },
+  transports: ['websocket', 'polling']
+});
+```
+
+### Events หลัก:
+| Event | ทิศทาง | คำอธิบาย |
+|-------|--------|----------|
+| `join_room` | Client → Server | เข้าห้องแชท |
+| `leave_room` | Client → Server | ออกจากห้อง |
+| `new_message` | Server → Client | ข้อความใหม่ |
+| `typing` | Client ↔ Server | กำลังพิมพ์ |
+
+---
+
+## 📂 Static Files
+
+ไฟล์ที่อัปโหลดจะอยู่ใน:
+
+| โฟลเดอร์ | คำอธิบาย |
+|----------|----------|
+| `/uploads` | รูปภาพและเอกสาร |
+| `/qrs` | QR Code PromptPay (ลบอัตโนมัติตาม `QR_RETENTION_DAYS`) |
+| `/pdfs` | ใบเสร็จ PDF |
+
+---
+
+## 📝 หมายเหตุ
+
+- ฐานข้อมูลและตารางจะถูกสร้างอัตโนมัติเมื่อรันครั้งแรก
+- Socket.IO ใช้ `Authorization: Bearer <token>` ใน handshake headers
+- QR Code จะถูกลบอัตโนมัติตามจำนวนวันที่ตั้งค่าใน `QR_RETENTION_DAYS`
