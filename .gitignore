@@ -58,6 +58,7 @@ MyApp/.metro-health-check*
 
 # Scratch / temp scripts
 scratch/
+docs/
 h origin main
 
 # Docx generator tools (local utility)
