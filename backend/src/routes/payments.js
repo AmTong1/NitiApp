@@ -5,7 +5,6 @@ const { hasDb } = require('../utils/db');
 const { authGuard, adminOnly } = require('../middleware/auth');
 const { getDiscountForCycle, applyDiscountToAmount } = require('./discount');
 
-// Helper: log month changes to resident_logs table
 async function logMonthChange({ houseNumber, oldMonths, newMonths, user }) {
   try {
     await pool.query(`CREATE TABLE IF NOT EXISTS resident_logs (
@@ -20,7 +19,6 @@ async function logMonthChange({ houseNumber, oldMonths, newMonths, user }) {
       performed_by_role VARCHAR(32) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`);
-    // Get resident name
     let residentName = null;
     const [rRows] = await pool.query(
       "SELECT id, TRIM(CONCAT_WS(' ', NULLIF(title,''), NULLIF(first_name,''), NULLIF(last_name,''))) AS name FROM residents WHERE house_number = ? LIMIT 1",
@@ -92,14 +90,12 @@ async function ensurePaymentsTable() {
   await addColumn('payments', 'total_amount', 'DECIMAL(12,2) NULL');
   await addColumn('payments', 'note', 'VARCHAR(255) NULL');
 
-  // พยายามสร้าง index / FK (ถ้ามีแล้วจะเงียบ)
   try {
     await pool.query(`CREATE INDEX idx_pay_house_id ON payments (house_id)`);
   } catch (e) {
     if (!(e?.code === 'ER_DUP_KEYNAME' || e?.errno === 1061)) throw e;
   }
 
-  // Backfill house_id for legacy rows using house_number mapping.
   try {
     await pool.query(
       `UPDATE payments p
@@ -138,7 +134,6 @@ async function regenerateInstallmentsForPayment(paymentId) {
     return { regenerated: false, reason: 'installments_table_missing' };
   }
 
-  // Ensure discount columns exist
   await addColumn('payment_installments', 'original_amount', 'DECIMAL(12,2) NULL');
   await addColumn('payment_installments', 'discount_amount', 'DECIMAL(12,2) NULL DEFAULT 0');
 
@@ -157,7 +152,6 @@ async function regenerateInstallmentsForPayment(paymentId) {
     return { regenerated: false, reason: 'invalid_months' };
   }
 
-  // Find existing paid or waiting_approval installments
   const [existingRows] = await pool.query(
     `SELECT installment_no, months_span
        FROM payment_installments
@@ -178,13 +172,10 @@ async function regenerateInstallmentsForPayment(paymentId) {
 
   const remainingMonths = 12 - paidMonthsCovered;
   if (remainingMonths <= 0) {
-    // All 12 months are already covered by paid/waiting installments
-    // Just delete any stray unpaid ones if they exist
     await pool.query("DELETE FROM payment_installments WHERE payment_id = ? AND status NOT IN ('paid', 'waiting_approval')", [paymentId]);
     return { regenerated: false, reason: 'fully_paid', remainingMonths: 0 };
   }
 
-  // Delete unpaid installments
   await pool.query("DELETE FROM payment_installments WHERE payment_id = ? AND status NOT IN ('paid', 'waiting_approval')", [paymentId]);
 
   const createdAt = new Date(p.created_at);
@@ -198,7 +189,7 @@ async function regenerateInstallmentsForPayment(paymentId) {
     let span = remainder === 0 ? months : months - remainder;
 
     if (monthsProcessed + span > remainingMonths) {
-      span = remainingMonths - monthsProcessed; // Fractional last installment
+      span = remainingMonths - monthsProcessed;
     }
 
     currentInstallmentNo++;
@@ -212,7 +203,6 @@ async function regenerateInstallmentsForPayment(paymentId) {
     const dueDate = periodEnd;
     const baseAmount = Number(p.amount_per_month || 0) * span;
 
-    // Apply discount if available for this cycle
     const discount = await getDiscountForCycle(span);
     const finalAmount = discount ? applyDiscountToAmount(baseAmount, discount) : baseAmount;
     const discountAmt = discount ? Math.round((baseAmount - finalAmount) * 100) / 100 : 0;
@@ -242,17 +232,15 @@ async function regenerateInstallmentsForPayment(paymentId) {
 }
 
 function registerPaymentRoutes(app) {
-  // รายการจ่ายทั้งหมดหรือกรองตามบ้าน
   app.get('/payments', authGuard, async (req, res) => {
     try {
       const ok = await ensurePaymentsTable();
-      if (!ok) return res.json({ ok: true, data: [] }); // fallback ไม่มี DB
+      if (!ok) return res.json({ ok: true, data: [] });
 
       const isAdmin = req.user?.role === 'admin' || req.user?.role === 'superadmin';
       let house = (req.query.house_number || req.query.house || '').toString().trim();
 
       if (!isAdmin) {
-        // บังคับใช้บ้านของผู้ใช้
         if (!house) house = (req.user?.house_number || '').toString().trim();
         if (!house && req.user?.id) {
           const [r] = await pool.query('SELECT house_number FROM residents WHERE account_id = ? LIMIT 1', [req.user.id]);
@@ -275,13 +263,11 @@ function registerPaymentRoutes(app) {
     }
   });
 
-  // สถานะบ้าน (admin)
   app.get('/payments/status', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensurePaymentsTable();
       if (!ok) return res.json({ ok: true, data: [] });
 
-      // รวมรายการบ้านจาก houses และ residents
       const unions = [];
       unions.push(`SELECT h.id AS hid, h.house_number, h.owner_name FROM houses h`);
       unions.push(`SELECT NULL AS hid, r.house_number, TRIM(CONCAT_WS(' ', NULLIF(r.title, ''), NULLIF(r.first_name, ''), NULLIF(r.last_name, ''))) AS owner_name FROM residents r`);
@@ -290,7 +276,6 @@ function registerPaymentRoutes(app) {
 
       if (!houses.length) return res.json({ ok: true, data: [] });
 
-      // ดึงสรุปการจ่ายต่อบ้าน: มีสลิปไหม และครอบคลุมถึงปัจจุบันหรือไม่
       const [agg] = await pool.query(`
         SELECT x.house_number,
                MAX(p.created_at) AS last_paid_at,
@@ -347,7 +332,6 @@ function registerPaymentRoutes(app) {
     }
   });
 
-  // ประวัติการจ่ายต่อบ้าน
   app.get('/payments/history/:house', authGuard, async (req, res) => {
     try {
       const ok = await ensurePaymentsTable();
@@ -368,7 +352,6 @@ function registerPaymentRoutes(app) {
     }
   });
 
-  // ชำระเงิน/เพิ่มเดือนให้บ้าน
   app.post('/payments/charge', authGuard, adminOnly, async (req, res) => {
     const { house_number, months, area_sq_m, note } = req.body || {};
     const hn = String(house_number || '').trim();
@@ -381,7 +364,6 @@ function registerPaymentRoutes(app) {
       const client = await pool.getClient();
       try {
         await client.query('BEGIN');
-        // หา area จาก houses หากไม่ส่งมา
         let area = area_sq_m != null ? Number(area_sq_m) : null;
         if (!Number.isFinite(area)) {
           const [hRows] = await client.query('SELECT area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [hn]);
@@ -397,7 +379,6 @@ function registerPaymentRoutes(app) {
           if (r && !isNaN(r)) rate = Number(r);
         } else {
           console.log('[Payment] Fallback to manual query');
-          // Fallback if app.getSetting not ready (should not happen)
           const [setRows] = await client.query("SELECT value FROM system_settings WHERE `key` = ?", ['rate_per_sqm']);
           if (setRows.length > 0) {
              console.log('[Payment] Manual query returned:', setRows[0].value);
@@ -409,7 +390,6 @@ function registerPaymentRoutes(app) {
         const per = area * rate;
         const total = per * m;
 
-        // sync area to houses table (ignore if table missing)
         try {
           await client.query(
             `INSERT INTO houses (house_number, area_sq_m)
@@ -418,7 +398,6 @@ function registerPaymentRoutes(app) {
             [hn, area]
           );
         } catch (syncErr) {
-          // ignore if table doesn't exist
         }
 
         let houseId = null;
@@ -426,17 +405,14 @@ function registerPaymentRoutes(app) {
           const [houseRows] = await client.query('SELECT id FROM houses WHERE house_number = ? LIMIT 1', [hn]);
           if (houseRows?.[0]?.id != null) houseId = Number(houseRows[0].id);
         } catch (e) {
-          // ignore lookup failure
         }
 
-        // insert payments
         await client.query(
           `INSERT INTO payments (house_id, house_number, area_sq_m, rate_per_sqm, months, amount_per_month, total_amount, note)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [houseId, hn, area, rate, m, per, total, note || 'Manual charge']
         );
 
-        // update residents.pay_months = +months
         await client.query(
           `UPDATE residents SET pay_months = COALESCE(pay_months, 0) + ? WHERE house_number = ?`,
           [m, hn]
@@ -456,7 +432,6 @@ function registerPaymentRoutes(app) {
     }
   });
 
-  // แก้/อัปเดตรายการ payments (เฉพาะแอดมิน)
   app.put('/payments/:id', authGuard, adminOnly, async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -471,7 +446,6 @@ function registerPaymentRoutes(app) {
         note,
       } = req.body || {};
 
-      // ดึงเดิม
       const [oldRows] = await pool.query('SELECT * FROM payments WHERE id = ? LIMIT 1', [id]);
       const old = oldRows[0];
       if (!old) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
@@ -496,7 +470,6 @@ function registerPaymentRoutes(app) {
             [String(old.house_number), area]
           );
         } catch (syncErr) {
-          // ignore if table doesn't exist
         }
       }
 
@@ -506,19 +479,16 @@ function registerPaymentRoutes(app) {
           const [hRows] = await pool.query('SELECT id FROM houses WHERE house_number = ? LIMIT 1', [String(old.house_number)]);
           if (hRows?.[0]?.id != null) houseId = Number(hRows[0].id);
         } catch (e) {
-          // ignore if cannot resolve house id
         }
       }
 
-      // --- เพิ่มการคำนวณปรับลดจำนวนเดือน (ถ้ามี) ---
-      const newMonths = m;              // m = months (validated)
+      const newMonths = m;
       const oldMonths = Number(old.months || 0);
       let diffDecrease = 0;
       if (newMonths < oldMonths) {
         diffDecrease = oldMonths - newMonths;
       }
 
-      // (คงการ update แถวหลัก)
       await pool.query(
         `UPDATE payments
           SET house_id = COALESCE(?, house_id),
@@ -532,19 +502,16 @@ function registerPaymentRoutes(app) {
         [houseId, area, rate, m, per, total, note ?? old.note, id]
       );
 
-      // ถ้ามีการลดเดือน -> ปรับ residents และบันทึก adjustment ติดลบ
       if (diffDecrease > 0) {
         try {
           const houseNumber = old.house_number;
           if (houseNumber) {
-            // อัปเดต resident
             await pool.query(
               `UPDATE residents
                  SET pay_months = GREATEST(0, COALESCE(pay_months,0) - ?)
                WHERE house_number = ?`,
               [diffDecrease, houseNumber]
             );
-            // หา house_id + area (ใช้ area ใหม่ถ้าแก้, fallback ของเก่า)
             let areaAdj = Number(old.area_sq_m || 0);
             const [hrows] = await pool.query('SELECT id, area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [houseNumber]);
             const houseId = hrows?.[0]?.id || null;
@@ -554,7 +521,6 @@ function registerPaymentRoutes(app) {
             const perAdj = areaAdj * rateAdj;
             const totalAdj = perAdj * (-diffDecrease);
 
-            // ตรวจคอลัมน์
             const [colsRows] = await pool.query(
               `SELECT column_name
                  FROM information_schema.columns
@@ -589,7 +555,6 @@ function registerPaymentRoutes(app) {
         [id]
       );
 
-      // Log month change if months changed
       if (months !== undefined && Number(months) !== oldMonths) {
         await logMonthChange({
           houseNumber: old.house_number,
@@ -606,7 +571,6 @@ function registerPaymentRoutes(app) {
     }
   });
 
-  // ลบรายการ (หากต้องการ)
   app.delete('/payments/:id', authGuard, adminOnly, async (req, res) => {
     try {
       const id = Number(req.params.id);

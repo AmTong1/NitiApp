@@ -30,7 +30,6 @@ function normalizeUploadRelativePath(fileInput) {
     try {
       raw = new URL(raw).pathname;
     } catch {
-      // Keep original when URL parsing fails.
     }
   }
 

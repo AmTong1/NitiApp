@@ -31,7 +31,6 @@ function registerAdminRoutes(app) {
       const a = Number(amount);
       const [result] = await pool.query('UPDATE users SET amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [a, userId]);
       if (!result || Number(result.affectedRows || 0) === 0) {
-        // If no row was updated, create one.
         const [existing] = await pool.query('SELECT id FROM users WHERE id = ?', [userId]);
         if (!existing || existing.length === 0) {
           await pool.query('INSERT INTO users (id, amount) VALUES (?, ?)', [userId, a]);

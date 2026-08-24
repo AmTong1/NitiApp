@@ -425,10 +425,6 @@ function isAdminRole(role) {
 }
 
 function shouldTrackServerUnread(roomType, role) {
-  // Requested behavior:
-  // - DM unread: sync across devices for all roles
-  // - User public-room unread: sync across devices
-  // - Admin public-room unread: local device only
   if (roomType === 'dm') return true;
   if (roomType === 'public' && role === 'user') return true;
   return false;
@@ -507,7 +503,6 @@ async function ensureUnreadCursorInitialized({ roomId, userId }) {
     return Number(readRows[0]?.last_read_message_id || 0);
   }
 
-  // First time in room: baseline at latest message so unread starts from user's own timeline.
   const [maxRows] = await pool.query(
     'SELECT MAX(id) AS max_id FROM chat_messages WHERE room_id = ?',
     [normalizedRoomId]
@@ -884,7 +879,6 @@ function registerChatRoutes(app, io) {
       if (room.room_type === 'dm') {
         let ok = await isMember(roomId, user.id);
 
-        // Data-heal for user-owned admin DM: allow pin actions even if chat_members row is missing.
         if (!ok && !isAdminRole(user.role) && Number(room?.owner_id || 0) === Number(user.id)) {
           const [adminRows] = await pool.query(
             `SELECT 1
@@ -1154,7 +1148,6 @@ function registerChatRoutes(app, io) {
         roomId = insResult.insertId;
       }
 
-      // Ensure memberships exist even if room already existed or partial data is missing.
       const meRole = Number(me.id) === Number(adminId) ? 'admin' : 'member';
       await ensureMember(roomId, me.id, meRole);
       if (Number(adminId) !== Number(me.id)) {
@@ -1229,7 +1222,6 @@ function registerChatRoutes(app, io) {
     }
     
     if (hasReplyCol) {
-      // keep as-is; client can fetch reply meta as needed
     }
     sql += ` ORDER BY m.id DESC LIMIT ?`;
     params.push(pageLimit);
@@ -1591,7 +1583,6 @@ function registerChatRoutes(app, io) {
       const selected = Array.from(byOwner.values());
 
       for (const room of selected) {
-        // Keep membership consistent for admin list and unread query access.
         await ensureMember(room.id, adminUserId, 'admin');
       }
 
@@ -1636,9 +1627,6 @@ function registerChatRoutes(app, io) {
     }
   });
 
-  // ===== Reactions API =====
-  
-  // Add or update reaction
   app.post('/chat/reactions', authGuard, async (req, res) => {
     try {
       const user = req.user;
@@ -1656,7 +1644,6 @@ function registerChatRoutes(app, io) {
         return res.status(400).json({ error: 'INVALID_EMOJI' });
       }
 
-      // Verify message exists and user has access
       const [msgRows] = await pool.query(
         `SELECT m.*, r.room_type FROM chat_messages m
          JOIN chat_rooms r ON r.id = m.room_id
@@ -1674,7 +1661,6 @@ function registerChatRoutes(app, io) {
         if (!ok) return res.status(403).json({ error: 'FORBIDDEN' });
       }
 
-      // Upsert reaction (one reaction per user per message)
       await pool.query(
         `INSERT INTO chat_reactions (message_id, user_id, emoji)
          VALUES (?, ?, ?)
@@ -1682,7 +1668,6 @@ function registerChatRoutes(app, io) {
         [messageId, user.id, emoji]
       );
 
-      // Fetch all reactions for this message
       const [reactions] = await pool.query(
         `SELECT cr.*, a.username, a.full_name
          FROM chat_reactions cr
@@ -1692,7 +1677,6 @@ function registerChatRoutes(app, io) {
         [messageId]
       );
 
-      // Emit to room
       io.to(`room:${msg.room_id}`).emit('reaction_update', {
         room_id: Number(msg.room_id),
         message_id: messageId,
@@ -1706,7 +1690,6 @@ function registerChatRoutes(app, io) {
     }
   });
 
-  // Remove reaction
   app.delete('/chat/reactions/:messageId', authGuard, async (req, res) => {
     try {
       const user = req.user;
@@ -1718,7 +1701,6 @@ function registerChatRoutes(app, io) {
         return res.status(429).json({ error: 'RATE_LIMITED', retry_after_seconds: reactionRate.retryAfterSeconds });
       }
 
-      // Verify message exists
       const [msgRows] = await pool.query(
         `SELECT m.*, r.room_type FROM chat_messages m
          JOIN chat_rooms r ON r.id = m.room_id
@@ -1736,13 +1718,11 @@ function registerChatRoutes(app, io) {
         if (!ok) return res.status(403).json({ error: 'FORBIDDEN' });
       }
 
-      // Delete user's reaction
       await pool.query(
         `DELETE FROM chat_reactions WHERE message_id = ? AND user_id = ?`,
         [messageId, user.id]
       );
 
-      // Fetch remaining reactions
       const [reactions] = await pool.query(
         `SELECT cr.*, a.username, a.full_name
          FROM chat_reactions cr
@@ -1752,7 +1732,6 @@ function registerChatRoutes(app, io) {
         [messageId]
       );
 
-      // Emit to room
       io.to(`room:${msg.room_id}`).emit('reaction_update', {
         room_id: Number(msg.room_id),
         message_id: messageId,
@@ -1766,9 +1745,6 @@ function registerChatRoutes(app, io) {
     }
   });
 
-
-  
-  // Notification: Send payment status update to resident (Admin only)
   app.post('/chat/notify-payment', authGuard, async (req, res) => {
     try {
       const { role, id: adminId } = req.user;
@@ -1779,7 +1755,6 @@ function registerChatRoutes(app, io) {
       const { installment_id, status } = req.body;
       if (!installment_id || !status) return res.status(400).json({ error: 'Missing params' });
 
-      // 1. Find resident account_id from installment
       const [rows] = await pool.query(
         `SELECT r.account_id, r.first_name, r.last_name, r.house_number, pi.installment_no, pi.amount
          FROM payment_installments pi
@@ -1797,7 +1772,6 @@ function registerChatRoutes(app, io) {
 
       const targetUserId = resident.account_id;
 
-      // 2. Ensure DM Room exists
       const [roomRows] = await pool.query(
         `SELECT r.id
          FROM chat_rooms r
@@ -1810,28 +1784,24 @@ function registerChatRoutes(app, io) {
 
       let roomId = roomRows[0]?.id;
       if (!roomId) {
-        // Create new DM room
         const roomName = `DM ${resident.first_name}`;
         const [insRoom] = await pool.query(
           "INSERT INTO chat_rooms (name, room_type, owner_id) VALUES (?, 'dm', ?)",
-          [roomName, targetUserId] // Owner is user (usually)
+          [roomName, targetUserId]
         );
         roomId = insRoom.insertId;
       }
 
-      // Ensure memberships are present every time.
       const targetRole = Number(targetUserId) === Number(adminId) ? 'admin' : 'member';
       await ensureMember(roomId, targetUserId, targetRole);
       if (Number(targetUserId) !== Number(adminId)) {
         await ensureMember(roomId, adminId, 'admin');
       }
 
-      // 3. Construct Message
       const statusText = status === 'pending' ? 'รอชำระ' : status === 'overdue' ? 'ค้างชำระ' : status;
       const amountFmt = Number(resident.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 });
       const message = `🔔 แจ้งเตือนสถานะการชำระเงิน\n\nงวดที่ ${resident.installment_no} (บ้านเลขที่ ${resident.house_number})\nยอดชําระ: ${amountFmt} บาท\nสถานะปัจจุบัน: ${statusText}\n\nกรุณาตรวจสอบและดำเนินการชำระเงิน`;
 
-      // 4. Send Message
       const [insMsg] = await pool.query(
         `INSERT INTO chat_messages (room_id, user_id, text, msg_type)
          VALUES (?, ?, ?, 'text')`,

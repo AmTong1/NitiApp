@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
 const fileFilter = (req, file, cb) => cb(null, true);
 const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
-let memRepairs = []; // {id,user_id,title,detail,house_number,status,created_at, photos?:[{id,url}]}
+let memRepairs = [];
 let memPhotos  = [];
 let memPhotoSeq = 1;
 
@@ -24,7 +24,6 @@ function inClause(values) {
   return values.map(() => '?').join(', ');
 }
 
-// Ensure house_number column exists in repairs table
 async function ensureRepairsHouseNumberColumn() {
   if (!(await hasDb())) return;
   if (!(await tableExists('repairs'))) return;
@@ -38,7 +37,6 @@ async function ensureRepairsHouseNumberColumn() {
   }
 }
 
-// Ensure done_at column exists in repairs table (tracks when status changed to 'done')
 async function ensureRepairsDoneAtColumn() {
   if (!(await hasDb())) return;
   if (!(await tableExists('repairs'))) return;
@@ -52,7 +50,6 @@ async function ensureRepairsDoneAtColumn() {
   }
 }
 
-// Ensure repair_delete_logs table exists
 async function ensureRepairDeleteLogsTable() {
   if (!(await hasDb())) return;
   if (await tableExists('repair_delete_logs')) return;
@@ -76,7 +73,6 @@ async function ensureRepairDeleteLogsTable() {
   }
 }
 
-// Ensure repair_edit_logs table exists
 async function ensureRepairEditLogsTable() {
   if (!(await hasDb())) return;
   if (await tableExists('repair_edit_logs')) return;
@@ -159,7 +155,6 @@ async function migrateRepairIdToVarchar() {
   }
 }
 
-// Ensure allow_user_edit column exists (default true)
 async function ensureRepairsAllowUserEditColumn() {
   if (!(await hasDb())) return;
   if (!(await tableExists('repairs'))) return;
@@ -221,20 +216,13 @@ async function attachPhotosToList(items) {
 }
 
 function registerRepairRoutes(app) {
-  // Ensure repairs.id is VARCHAR(32)
   migrateRepairIdToVarchar().catch(e => console.warn('migrateRepairIdToVarchar:', e.message));
-  // Ensure house_number column on startup
   ensureRepairsHouseNumberColumn().catch(e => console.warn('ensureRepairsHouseNumberColumn:', e.message));
-  // Ensure done_at column on startup
   ensureRepairsDoneAtColumn().catch(e => console.warn('ensureRepairsDoneAtColumn:', e.message));
-  // Ensure repair_delete_logs table on startup
   ensureRepairDeleteLogsTable().catch(e => console.warn('ensureRepairDeleteLogsTable:', e.message));
-  // Ensure allow_user_edit column
   ensureRepairsAllowUserEditColumn().catch(e => console.warn('ensureRepairsAllowUserEditColumn:', e.message));
-  // Ensure repair_edit_logs table
   ensureRepairEditLogsTable().catch(e => console.warn('ensureRepairEditLogsTable:', e.message));
 
-  // Upload a generic file (returns processed URL)
   app.post('/upload', authGuard, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) return res.status(400).json({ error: 'FILE_REQUIRED' });
@@ -257,14 +245,12 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // List repairs (+photos)
   app.get('/repairs', authGuard, async (req, res) => {
     try {
       const usable = (await hasDb()) && (await tableExists('repairs'));
       if (!usable) {
         const userId = String(req.user.id);
         let list = isAdmin(req.user) ? memRepairs : memRepairs.filter(r => String(r.user_id) === userId);
-        // สำหรับ admin: เรียงให้ done อยู่ล่างสุด
         if (isAdmin(req.user)) {
           list = [...list].sort((a, b) => {
             if (a.status === 'done' && b.status !== 'done') return 1;
@@ -272,7 +258,6 @@ function registerRepairRoutes(app) {
             return new Date(b.created_at) - new Date(a.created_at);
           });
         } else {
-          // สำหรับ user: ซ่อน done ที่เกิน 7 วัน
           const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
           list = list.filter(r => {
             if (r.status !== 'done') return true;
@@ -283,10 +268,8 @@ function registerRepairRoutes(app) {
         return res.json(list);
       }
 
-      // ถ้าเป็น admin ดูได้ทั้งหมด ถ้าเป็น user ดูได้เฉพาะที่ user_id ตรง หรือ house_number ที่ user เป็นเจ้าของ
       let userHouseNumbers = [];
       if (!isAdmin(req.user)) {
-        // หา house_number ที่ user เป็นเจ้าของ
         const [houseRows] = await pool.query(
           `SELECT house_number FROM residents WHERE account_id = ?`,
           [req.user.id]
@@ -299,16 +282,13 @@ function registerRepairRoutes(app) {
       const params = [];
       
       if (userId) {
-        // user เห็นได้ทั้งที่ user_id ตรง และ house_number ที่เป็นเจ้าของ
         if (userHouseNumbers.length > 0) {
           where.push(`(user_id = ? OR house_number IN (${inClause(userHouseNumbers)}))`);
           params.push(userId, ...userHouseNumbers);
-          // สำหรับ user: ซ่อน done ที่เกิน 7 วัน
           where.push(`(status != 'done' OR (status = 'done' AND done_at > DATE_SUB(NOW(), INTERVAL 7 DAY)))`);
         } else {
           where.push('user_id = ?');
           params.push(userId);
-          // สำหรับ user: ซ่อน done ที่เกิน 7 วัน
           where.push(`(status != 'done' OR (status = 'done' AND done_at > DATE_SUB(NOW(), INTERVAL 7 DAY)))`);
         }
       }
@@ -316,7 +296,6 @@ function registerRepairRoutes(app) {
       const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
       const cols = await repairColumns();
 
-      // สำหรับ admin: ORDER BY เพื่อให้ done อยู่ล่างสุด
       const orderBy = isAdmin(req.user) 
         ? `ORDER BY CASE WHEN status = 'done' THEN 1 ELSE 0 END, created_at DESC`
         : `ORDER BY created_at DESC`;
@@ -337,7 +316,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // ===== SuperAdmin: Get all repair logs =====
   app.get('/repairs/logs', authGuard, async (req, res) => {
     try {
       if (!isSuperAdmin(req.user) && !isAdmin(req.user)) {
@@ -383,7 +361,6 @@ function registerRepairRoutes(app) {
 
       const [rows] = await pool.query(sql, params);
 
-      // Attach photos
       if (rows.length > 0 && await tableExists('repair_photos')) {
         const ids = rows.map(r => r.id);
         const placeholders = inClause(ids);
@@ -407,7 +384,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // ===== Get edit history for repairs =====
   app.get('/repairs/edit-logs', authGuard, async (req, res) => {
     try {
       if (!isAdmin(req.user) && !isSuperAdmin(req.user)) {
@@ -453,10 +429,8 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // ===== SuperAdmin: Get delete logs ===== (MUST be before /repairs/:id)
   app.get('/repairs/delete-logs', authGuard, async (req, res) => {
     try {
-      // Only superadmin can view delete logs
       if (!isSuperAdmin(req.user)) {
         return res.status(403).json({ error: 'SUPERADMIN_ONLY' });
       }
@@ -465,7 +439,6 @@ function registerRepairRoutes(app) {
         return res.json([]);
       }
 
-      // Join with accounts to get deleter info, and get house_number from residents
       const [logs] = await pool.query(`
         SELECT 
           dl.id,
@@ -488,7 +461,6 @@ function registerRepairRoutes(app) {
         LIMIT 100
       `);
       
-      // Format response - ถ้าเป็น admin แสดง "Admin" ถ้าเป็น superadmin แสดง "SuperAdmin"
       const formatted = logs.map(log => ({
         ...log,
         deleted_by_display: log.deleted_by_role === 'superadmin' 
@@ -504,7 +476,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // Get one repair (+photos)
   app.get('/repairs/:id', authGuard, async (req, res) => {
     try {
       const id = String(req.params.id).trim();
@@ -523,7 +494,6 @@ function registerRepairRoutes(app) {
       const item = await getRepairWithPhotos(id);
       if (!item) return res.status(404).json({ error: 'NOT_FOUND' });
       
-      // ตรวจสอบสิทธิ์: admin ดูได้ทั้งหมด, user ดูได้ถ้า user_id ตรง หรือ house_number เป็นของตัวเอง
       if (!isAdmin(req.user)) {
         const isOwnerByUserId = String(item.user_id) === String(req.user.id);
         let isOwnerByHouse = false;
@@ -548,7 +518,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // Create repair (supports body.images[])
   app.post('/repairs', authGuard, async (req, res) => {
     try {
       const { title, detail, images, house_number, allow_user_edit } = req.body || {};
@@ -561,12 +530,9 @@ function registerRepairRoutes(app) {
       const cleanDetail = detail ?? null;
       const cleanHouseNumber = house_number ? String(house_number).trim() : null;
 
-      // Allow admin to set allow_user_edit (default true)
-      // If NOT admin, force true
       const canSetEdit = isAdmin(req.user);
       const finalAllowEdit = canSetEdit && allow_user_edit === false ? false : true;
 
-      // ถ้า admin สร้างและระบุ house_number → หา account_id ของเจ้าของบ้านมาใช้เป็น user_id
       if (isAdmin(req.user) && cleanHouseNumber) {
         try {
           const [ownerRows] = await pool.query(
@@ -638,7 +604,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // Update repair
   app.put('/repairs/:id', authGuard, async (req, res) => {
     try {
       const id = String(req.params.id).trim();
@@ -653,7 +618,6 @@ function registerRepairRoutes(app) {
         const owner = String(item.user_id) === String(req.user.id);
         if (!owner && !isAdmin(req.user)) return res.status(403).json({ error: 'FORBIDDEN' });
         
-        // If locked by admin, owner cannot edit
         if (item.allow_user_edit === false && !isAdmin(req.user)) {
              return res.status(403).json({ error: 'LOCKED_BY_ADMIN' });
         }
@@ -664,7 +628,6 @@ function registerRepairRoutes(app) {
           if (!isAdmin(req.user)) return res.status(403).json({ error: 'ONLY_ADMIN_CAN_UPDATE_STATUS' });
           const st = String(status);
           if (!['pending','in_progress','done'].includes(st)) return res.status(400).json({ error: 'INVALID_STATUS' });
-          // track done_at
           if (st === 'done' && item.status !== 'done') {
             item.done_at = new Date().toISOString();
           } else if (st !== 'done') {
@@ -682,7 +645,6 @@ function registerRepairRoutes(app) {
       const owner = String(exist.user_id) === String(req.user.id);
       if (!owner && !isAdmin(req.user)) return res.status(403).json({ error: 'FORBIDDEN' });
 
-      // If locked by admin, owner cannot edit
       if (exist.allow_user_edit === false && !isAdmin(req.user)) {
          return res.status(403).json({ error: 'LOCKED_BY_ADMIN' });
       }
@@ -695,7 +657,6 @@ function registerRepairRoutes(app) {
         const st = String(status);
         if (!['pending','in_progress','done'].includes(st)) return res.status(400).json({ error: 'INVALID_STATUS' });
         fields.push('status = ?'); params.push(st);
-        // track done_at: set เมื่อเปลี่ยนเป็น done, clear เมื่อเปลี่ยนเป็นอย่างอื่น
         if (st === 'done' && exist.status !== 'done') {
           fields.push(`done_at = NOW()`);
         } else if (st !== 'done' && exist.status === 'done') {
@@ -707,7 +668,6 @@ function registerRepairRoutes(app) {
       params.push(id);
       await pool.query(`UPDATE repairs SET ${fields.join(', ')} WHERE id = ?`, params);
 
-      // Log edit history
       const editChanges = {};
       if (title !== undefined && String(title) !== String(exist.title)) {
         editChanges.title = { old: exist.title, new: String(title) };
@@ -732,7 +692,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // Delete repair (cascade photos) - รับ delete_reason สำหรับบันทึก log
   app.delete('/repairs/:id', authGuard, async (req, res) => {
     try {
       const id = String(req.params.id).trim();
@@ -756,7 +715,6 @@ function registerRepairRoutes(app) {
       const owner = String(exist.user_id) === String(req.user.id);
       if (!owner && !isAdmin(req.user)) return res.status(403).json({ error: 'FORBIDDEN' });
 
-      // บันทึก log การลบ (ถ้ามี delete_reason หรือต้องการเก็บ log ทุกครั้ง)
       if (await tableExists('repair_delete_logs')) {
         await pool.query(
           `INSERT INTO repair_delete_logs (repair_id, repair_title, repair_detail, repair_house_number, repair_status, deleted_by, delete_reason)
@@ -774,7 +732,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // Upload a photo to a repair
   app.post('/repairs/:id/image', authGuard, upload.single('file'), async (req, res) => {
     try {
       const id = String(req.params.id).trim();
@@ -789,7 +746,6 @@ function registerRepairRoutes(app) {
         const owner = String(item.user_id) === String(req.user.id);
         if (!owner && !isAdmin(req.user)) return res.status(403).json({ error: 'FORBIDDEN' });
 
-        // If locked by admin, owner cannot add photo
         if (item.allow_user_edit === false && !isAdmin(req.user)) {
              return res.status(403).json({ error: 'LOCKED_BY_ADMIN' });
         }
@@ -815,7 +771,6 @@ function registerRepairRoutes(app) {
       const owner = String(exist.user_id) === String(req.user.id);
       if (!owner && !isAdmin(req.user)) return res.status(403).json({ error: 'FORBIDDEN' });
 
-      // If locked by admin, owner cannot add photo
       if (exist.allow_user_edit === false && !isAdmin(req.user)) {
            return res.status(403).json({ error: 'LOCKED_BY_ADMIN' });
       }
@@ -839,7 +794,6 @@ function registerRepairRoutes(app) {
     }
   });
 
-  // Delete one photo from a repair
   app.delete('/repairs/:id/image/:pid', authGuard, async (req, res) => {
     try {
       const id = String(req.params.id).trim();
@@ -847,18 +801,15 @@ function registerRepairRoutes(app) {
       if (!id || isNaN(pid)) return res.status(400).json({ error: 'INVALID_ID' });
       const usable = (await hasDb()) && (await tableExists('repairs'));
 
-      // Helper to remove physical file if it exists
       const removeFileByUrl = async (url) => {
         try {
           if (!url || typeof url !== 'string') return;
-          // Expect url like /uploads/repairs/<filename>.jpg
           const base = '/uploads/repairs/';
           if (!url.startsWith(base)) return;
           const filename = path.basename(url);
           const filePath = path.join(PROCESSED_DIR, filename);
           await fs.remove(filePath);
         } catch (e) {
-          // ignore file removal errors
         }
       };
 
@@ -868,7 +819,6 @@ function registerRepairRoutes(app) {
         const owner = String(item.user_id) === String(req.user.id);
         if (!owner && !isAdmin(req.user)) return res.status(403).json({ error: 'FORBIDDEN' });
 
-        // If locked by admin, owner cannot delete photo
         if (item.allow_user_edit === false && !isAdmin(req.user)) {
              return res.status(403).json({ error: 'LOCKED_BY_ADMIN' });
         }
@@ -882,13 +832,11 @@ function registerRepairRoutes(app) {
         return res.json({ ok: true });
       }
 
-      // DB mode
       const exist = await getRepairByIdDb(id);
       if (!exist) return res.status(404).json({ error: 'NOT_FOUND' });
       const owner = String(exist.user_id) === String(req.user.id);
       if (!owner && !isAdmin(req.user)) return res.status(403).json({ error: 'FORBIDDEN' });
 
-      // If locked by admin, owner cannot delete photo
       if (exist.allow_user_edit === false && !isAdmin(req.user)) {
            return res.status(403).json({ error: 'LOCKED_BY_ADMIN' });
       }

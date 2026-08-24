@@ -1,7 +1,6 @@
 const path = require('path');
 const fs = require('fs-extra');
 
-// Resolve to backend root (one up from this file)
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const UPLOAD_DIR = path.join(ROOT_DIR, 'uploads');
 const DOCUMENT_UPLOAD_DIR = path.join(UPLOAD_DIR, 'documents');
@@ -29,4 +28,3 @@ module.exports = {
   PDF_DIR,
   ensureDirs,
 };
-

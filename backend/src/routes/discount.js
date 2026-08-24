@@ -6,7 +6,6 @@ const { authGuard, adminOnly } = require('../middleware/auth');
 const VALID_CYCLES = [3, 6, 12];
 const CYCLE_LABELS = { 3: 'ราย 3 เดือน', 6: 'ราย 6 เดือน', 12: 'รายปี' };
 
-// ───── Auto-create tables on boot ─────
 async function ensureDiscountTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS discount_configs (
@@ -46,7 +45,6 @@ async function ensureDiscountTables() {
   `);
 }
 
-// ───── Helper: get user display name ─────
 async function getUserName(userId) {
   try {
     const [rows] = await pool.query(
@@ -58,7 +56,6 @@ async function getUserName(userId) {
   } catch { return 'Unknown'; }
 }
 
-// ───── Helper: apply discount to discount_configs table ─────
 async function applyDiscount(cycleMonths, discountType, discountValue, userId) {
   await pool.query(
     `INSERT INTO discount_configs (cycle_months, discount_type, discount_value, enabled, updated_by)
@@ -72,7 +69,6 @@ async function applyDiscount(cycleMonths, discountType, discountValue, userId) {
   );
 }
 
-// ───── Helper: remove discount from discount_configs table ─────
 async function removeDiscount(cycleMonths) {
   await pool.query(
     `DELETE FROM discount_configs WHERE cycle_months = ?`,
@@ -83,8 +79,6 @@ async function removeDiscount(cycleMonths) {
 function registerDiscountRoutes(app) {
   ensureDiscountTables().catch(e => console.warn('[discount] ensureDiscountTables failed:', e.message));
 
-  // ═══════════ GET /discount/configs ═══════════
-  // Get all active discount configs (0-3 items)
   app.get('/discount/configs', authGuard, adminOnly, async (req, res) => {
     try {
       const [rows] = await pool.query(
@@ -93,7 +87,6 @@ function registerDiscountRoutes(app) {
          WHERE enabled = TRUE
          ORDER BY cycle_months ASC`
       );
-      // Also fetch any pending requests
       const [pendingRows] = await pool.query(
         `SELECT id, action, cycle_months, discount_type, discount_value,
                 old_discount_type, old_discount_value,
@@ -109,8 +102,6 @@ function registerDiscountRoutes(app) {
     }
   });
 
-  // ═══════════ POST /discount/configs ═══════════
-  // Create or update a discount for a specific cycle
   app.post('/discount/configs', authGuard, adminOnly, async (req, res) => {
     try {
       const { cycle_months, discount_type, discount_value } = req.body;
@@ -118,7 +109,6 @@ function registerDiscountRoutes(app) {
       const value = Number(discount_value);
       const type = String(discount_type || 'percentage');
 
-      // Validation
       if (!VALID_CYCLES.includes(cycle)) {
         return res.status(400).json({ ok: false, error: 'INVALID_CYCLE', message: 'cycle_months ต้องเป็น 3, 6 หรือ 12' });
       }
@@ -135,7 +125,6 @@ function registerDiscountRoutes(app) {
       const userName = await getUserName(req.user.id);
       const role = req.user.role;
 
-      // Check if config exists (to determine create vs update)
       const [existing] = await pool.query(
         `SELECT id, discount_type, discount_value FROM discount_configs WHERE cycle_months = ? LIMIT 1`,
         [cycle]
@@ -146,7 +135,6 @@ function registerDiscountRoutes(app) {
       const oldValue = isUpdate ? existing[0].discount_value : null;
 
       if (role === 'superadmin') {
-        // SuperAdmin: apply immediately
         await applyDiscount(cycle, type, value, req.user.id);
         await pool.query(
           `INSERT INTO discount_requests
@@ -159,8 +147,6 @@ function registerDiscountRoutes(app) {
         return res.json({ ok: true, status: 'approved', message: 'บันทึกส่วนลดเรียบร้อย' });
       }
 
-      // Admin: create waiting request
-      // Check if there's already a pending request for this cycle
       const [pendingExist] = await pool.query(
         `SELECT id FROM discount_requests WHERE cycle_months = ? AND status = 'waiting_approval' LIMIT 1`,
         [cycle]
@@ -184,8 +170,6 @@ function registerDiscountRoutes(app) {
     }
   });
 
-  // ═══════════ DELETE /discount/configs/:cycle ═══════════
-  // Delete a discount config for a specific cycle
   app.delete('/discount/configs/:cycle', authGuard, adminOnly, async (req, res) => {
     try {
       const cycle = Number(req.params.cycle);
@@ -218,7 +202,6 @@ function registerDiscountRoutes(app) {
         return res.json({ ok: true, status: 'approved', message: 'ลบส่วนลดเรียบร้อย' });
       }
 
-      // Admin: create waiting request
       const [pendingExist] = await pool.query(
         `SELECT id FROM discount_requests WHERE cycle_months = ? AND status = 'waiting_approval' LIMIT 1`,
         [cycle]
@@ -241,8 +224,6 @@ function registerDiscountRoutes(app) {
     }
   });
 
-  // ═══════════ GET /discount/requests ═══════════
-  // Get all discount requests (history)
   app.get('/discount/requests', authGuard, adminOnly, async (req, res) => {
     try {
       const [rows] = await pool.query(
@@ -262,8 +243,6 @@ function registerDiscountRoutes(app) {
     }
   });
 
-  // ═══════════ GET /discount/requests/waiting ═══════════
-  // Get only waiting approval requests
   app.get('/discount/requests/waiting', authGuard, adminOnly, async (req, res) => {
     try {
       const [rows] = await pool.query(
@@ -282,8 +261,6 @@ function registerDiscountRoutes(app) {
     }
   });
 
-  // ═══════════ PATCH /discount/requests/:id/status ═══════════
-  // Approve or reject a discount request (SuperAdmin only)
   app.patch('/discount/requests/:id/status', authGuard, async (req, res) => {
     try {
       if (req.user.role !== 'superadmin') {
@@ -308,7 +285,6 @@ function registerDiscountRoutes(app) {
       const userName = await getUserName(req.user.id);
 
       if (status === 'approved') {
-        // Apply the requested change
         if (request.action === 'create' || request.action === 'update') {
           await applyDiscount(request.cycle_months, request.discount_type, request.discount_value, req.user.id);
         } else if (request.action === 'delete') {
@@ -333,7 +309,6 @@ function registerDiscountRoutes(app) {
   });
 }
 
-// ───── Export helper for use in payments.js ─────
 async function getDiscountForCycle(cycleMonths) {
   try {
     const [rows] = await pool.query(
@@ -350,7 +325,6 @@ function applyDiscountToAmount(baseAmount, discount) {
   if (discount.type === 'percentage') {
     return Math.round((baseAmount * (1 - discount.value / 100)) * 100) / 100;
   }
-  // fixed
   return Math.max(0, Math.round((baseAmount - discount.value) * 100) / 100);
 }
 

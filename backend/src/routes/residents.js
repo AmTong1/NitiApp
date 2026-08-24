@@ -1,9 +1,8 @@
-const bcrypt = require('bcrypt');   // ใช้แพ็กเกจที่มีอยู่แล้ว
+const bcrypt = require('bcrypt');
 const { authGuard, adminOnly } = require('../middleware/auth');
 const { pool } = require('../db/pool');
 const { hasDb, columnExists } = require('../utils/db');
 
-// ============ Resident Logs ============
 async function ensureResidentLogsTable() {
   if (!(await hasDb())) return false;
   await pool.query(`CREATE TABLE IF NOT EXISTS resident_logs (
@@ -37,7 +36,6 @@ async function insertResidentLog(action, { residentId, houseNumber, residentName
     console.warn('insertResidentLog error:', e.message);
   }
 }
-// ============ End Resident Logs ============
 
 let mockResidents = (global.mockResidents ?? [
   { id: 1, house_number: '101', title: 'นาย', first_name: 'สมชาย', last_name: 'ใจดี', phone: '0812345678', household_count: 3, car_count: 1 },
@@ -46,7 +44,6 @@ let mockResidents = (global.mockResidents ?? [
 let mockSeq = mockResidents.length ? Math.max(...mockResidents.map(r => r.id)) : 0;
 global.mockResidents = mockResidents;
 
-// เช็กว่ามี index อยู่หรือยัง
 async function indexExists(table, indexName) {
   const [rows] = await pool.query(
     `SELECT COUNT(1) AS c FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
@@ -55,7 +52,6 @@ async function indexExists(table, indexName) {
   return (Number(rows?.[0]?.c) || 0) > 0;
 }
 
-// ✅ เพิ่มคอลัมน์ pay_months ถ้ายังไม่มี
 async function ensureResidentsTable() { try {
   if (!(await hasDb())) return false;
   await pool.query(`CREATE TABLE IF NOT EXISTS residents (
@@ -72,7 +68,6 @@ async function ensureResidentsTable() { try {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL
   )`);
-  // ให้แน่ใจว่ามีคอลัมน์ phone
   if (!(await columnExists('residents', 'phone'))) {
     await pool.query(`ALTER TABLE residents ADD COLUMN phone VARCHAR(32) NULL`);
   }
@@ -130,15 +125,10 @@ function dupField(err) {
   return undefined;
 }
 
-/**
- * บันทึกประวัติชำระครั้งแรกแบบยืดหยุ่นกับ schema (ถ้าไม่ครบจะข้าม)
- * ใช้ connection ที่รับมา (db = pool หรือ client ใน transaction)
- */
 async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
   const monthsNum = Number(months || 0);
   if (!Number.isInteger(monthsNum) || monthsNum <= 0) return;
   try {
-    // sync houses table
     let area = areaProvided != null ? Number(areaProvided) : null;
     let houseId = null;
     const [hrows] = await db.query(
@@ -150,7 +140,6 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
       if (area == null && hrows[0].area_sq_m != null) area = Number(hrows[0].area_sq_m);
     }
 
-    // ถ้ายังไม่มีบ้าน ให้สร้างจากข้อมูลใน residents
     if (!houseId) {
       const [rrows] = await db.query(
         'SELECT title, first_name, last_name, house_number FROM residents WHERE house_number = ? LIMIT 1',
@@ -166,7 +155,6 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
            area_sq_m = COALESCE(VALUES(area_sq_m), area_sq_m)`,
         [String(houseNumber), ownerName, Number.isFinite(area) ? area : null]
       );
-      // ดึง id อีกรอบ
       const [again] = await db.query('SELECT id, area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [String(houseNumber)]);
       if (again && again[0]) {
         houseId = again[0].id ?? null;
@@ -176,7 +164,6 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
 
     if (!Number.isFinite(area)) return;
 
-  // Get rate from settings or default 10
   let rate = 10;
   try {
     const [rows] = await db.query("SELECT value FROM system_settings WHERE `key` = ?", ['rate_per_sqm']);
@@ -186,11 +173,9 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
     }
   } catch (e) { console.warn('get rate error', e.message); }
 
-
     const perMonth = area * rate;
     const total = perMonth * monthsNum;
 
-    // ตรวจคอลัมน์ที่มีจริงใน payments
     const [colsRows] = await db.query(
       `SELECT column_name
          FROM information_schema.columns
@@ -202,7 +187,6 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
     const cols = [];
     const vals = [];
 
-    // ถ้ามี house_id (FK) ต้องใส่ และต้องมีค่า
     if (colSet.has('house_id')) {
       if (!houseId) {
         console.warn('insertInitialPayment: missing houseId for', houseNumber);
@@ -228,7 +212,6 @@ async function insertInitialPayment(db, { houseNumber, months, areaProvided }) {
   }
 }
 
-// ฟังก์ชัน upsertPayment
 async function upsertPayment(db, { houseNumber, months, areaProvided, restartCycle = false }) {
   const m = Number(months);
   if (!Number.isInteger(m) || m < 0) return;
@@ -255,7 +238,6 @@ async function upsertPayment(db, { houseNumber, months, areaProvided, restartCyc
     if (!Number.isFinite(area) && h2?.[0]?.area_sq_m != null) area = Number(h2[0].area_sq_m);
   }
   if (!Number.isFinite(area)) return;
-  // Get rate from settings or default 10
   let rate = 10;
   try {
     const [rows] = await db.query("SELECT value FROM system_settings WHERE `key` = ?", ['rate_per_sqm']);
@@ -276,7 +258,6 @@ async function upsertPayment(db, { houseNumber, months, areaProvided, restartCyc
     const currentMonths = Number(existRows[0].months || 0);
     const shouldRestartCycle = !!restartCycle || currentMonths !== m;
 
-    // Always preserve created_at to avoid shifting historical offsets for payment installments.
     await db.query(
       `UPDATE payments
          SET house_id = COALESCE(?, house_id),
@@ -338,7 +319,6 @@ async function upsertPayment(db, { houseNumber, months, areaProvided, restartCyc
     );
   }
 
-  // หลังอัปเดต ถ้า cover_until ผ่านไปแล้วให้ปรับเป็น pending
   await db.query(
     `UPDATE payments
        SET pay_status = CASE
@@ -356,7 +336,6 @@ async function upsertPayment(db, { houseNumber, months, areaProvided, restartCyc
   );
 }
 
-// ปรับ ensurePaymentsTable
 async function ensurePaymentsTable() {
   if (!(await hasDb())) return false;
   await pool.query(`CREATE TABLE IF NOT EXISTS payments (
@@ -377,7 +356,6 @@ async function ensurePaymentsTable() {
   return true;
 }
 
-// helper SQL fragment สำหรับคอลัมน์สถานะ
 const COVERAGE_COLUMNS = `
   pay.months AS paid_months,
   pay.cover_until,
@@ -387,7 +365,6 @@ const COVERAGE_COLUMNS = `
 `;
 
 function registerResidentRoutes(app) {
-  // Get resident of current account
   app.get('/me/resident', authGuard, async (req, res) => {
     try {
       if (!(await ensureResidentsTable())) return res.status(500).json({ ok: false, error: 'DB_NOT_READY' });
@@ -413,7 +390,6 @@ function registerResidentRoutes(app) {
     }
   });
   
-  // Update phone of current resident
   app.put('/me/resident/phone', authGuard, async (req, res) => {
     try {
       if (!(await ensureResidentsTable())) return res.status(500).json({ ok: false, error: 'DB_NOT_READY' });
@@ -423,7 +399,6 @@ function registerResidentRoutes(app) {
       if (phone != null && !/^\d{6,20}$/.test(String(phone))) {
         return res.status(400).json({ ok: false, error: 'INVALID_PHONE' });
       }
-      // Find resident linked to account
       const [rows] = await pool.query('SELECT id FROM residents WHERE account_id = ? LIMIT 1', [accountId]);
       const r = rows[0];
       if (!r) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
@@ -436,7 +411,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // GET /residents
   app.get('/residents', async (req, res) => {
     const q = String(req.query.q || '').trim();
     if (await ensureResidentsTable()) {
@@ -449,7 +423,6 @@ function registerResidentRoutes(app) {
           where.push('(r.house_number LIKE ? OR r.first_name LIKE ? OR r.last_name LIKE ? OR r.phone LIKE ? OR r.title LIKE ?)');
           params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
         }
-        // Keep one row per house_number in MySQL
         where.push('r.id = (SELECT r2.id FROM residents r2 WHERE r2.house_number = r.house_number ORDER BY r2.id DESC LIMIT 1)');
         where.push('r.deletion_status != "deleted"');
         const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -478,7 +451,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // Create (รองรับ pay_months)
   app.post('/residents', authGuard, adminOnly, async (req, res) => {
     const { house_number, title, first_name, last_name, phone, household_count, car_count, area_sq_m, pay_months } = req.body || {};
     if (!house_number || !first_name) return res.status(400).json({ ok: false, error: 'INVALID_BODY' });
@@ -492,7 +464,6 @@ function registerResidentRoutes(app) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [house_number, title ?? null, first_name, last_name ?? null, phoneDigits, Number(household_count ?? 1), Number(car_count ?? 0), monthsVal]
         );
-        // sync houses table
         const ownerName = [title, first_name, last_name].filter(Boolean).join(' ').trim() || null;
         await pool.query(
           `INSERT INTO houses (house_number, owner_name, area_sq_m)
@@ -501,7 +472,6 @@ function registerResidentRoutes(app) {
           [String(house_number), ownerName, area_sq_m != null ? Number(area_sq_m) : null]
         );
 
-        // บันทึกประวัติการชำระ
         try {
           await ensurePaymentsTable();
           if (monthsVal != null) {
@@ -518,7 +488,6 @@ function registerResidentRoutes(app) {
           [house_number]
         );
 
-        // Log create
         const created = rows[0];
         await insertResidentLog('create', {
           residentId: created?.id,
@@ -556,7 +525,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // Create Resident + Account (username/password)
   app.post('/residents/register', authGuard, adminOnly, async (req, res) => {
     const {
       house_number, title, first_name, last_name, phone,
@@ -576,7 +544,6 @@ function registerResidentRoutes(app) {
     const client = await pool.getClient();
     try {
       await client.query('BEGIN');
-      // accounts
       let accId;
       try {
         const [accResult] = await client.query(
@@ -589,7 +556,6 @@ function registerResidentRoutes(app) {
         throw e;
       }
 
-      // insert residents
       await client.query(
         `INSERT INTO residents
            (house_number, title, first_name, last_name, phone, household_count, car_count, pay_months, account_id)
@@ -603,7 +569,6 @@ function registerResidentRoutes(app) {
         ]
       );
 
-      // sync houses table
       const ownerName = [title, first_name, last_name]
         .filter(Boolean)
         .map((part) => String(part).trim())
@@ -618,9 +583,7 @@ function registerResidentRoutes(app) {
         [String(house_number), ownerName, area_sq_m != null ? Number(area_sq_m) : null]
       );
       
-      // บันทึก payments เริ่มต้น
       await ensurePaymentsTable();
-      // Note: upsertPayment needs wrapper for client
       const clientWrapper = {
         async query(text, values) {
           return client.query(text, values);
@@ -640,7 +603,6 @@ function registerResidentRoutes(app) {
         [house_number]
       );
 
-      // Log register (create with account)
       const created = rows[0];
       await insertResidentLog('create', {
         residentId: created?.id,
@@ -659,7 +621,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // Update (รองรับแก้ pay_months)
   app.put('/residents/:id', authGuard, adminOnly, async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -681,7 +642,6 @@ function registerResidentRoutes(app) {
       const okHouse = await ensureHousesTable();
       if (!okRes || !okHouse) return res.status(500).json({ ok: false, error: 'DB_NOT_READY' });
 
-      // ดึงข้อมูลเดิม
       const [oldRows] = await pool.query(
         'SELECT id, house_number, title, first_name, last_name, phone, household_count, car_count, pay_months FROM residents WHERE id = ? LIMIT 1',
         [id]
@@ -689,7 +649,6 @@ function registerResidentRoutes(app) {
       const old = oldRows[0];
       if (!old) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
 
-      // ดึง area_sq_m เดิมจาก houses
       let oldAreaSqM = null;
       try {
         const [hRows] = await pool.query('SELECT area_sq_m FROM houses WHERE house_number = ? LIMIT 1', [old.house_number]);
@@ -718,7 +677,6 @@ function registerResidentRoutes(app) {
       params.push(id);
       await pool.query(`UPDATE residents SET ${fields.join(', ')} WHERE id = ?`, params);
 
-      // อัปเดต / สร้างข้อมูลบ้าน (area ถ้าส่งมา)
       if (area_sq_m !== undefined || house_number !== undefined) {
         const hn = house_number !== undefined ? String(house_number) : String(old.house_number);
         await pool.query(
@@ -730,7 +688,6 @@ function registerResidentRoutes(app) {
         );
       }
 
-      // อัปเดต snapshot payments ให้ตรงกับค่าใหม่
       if (pay_months !== undefined) {
         try {
           await ensurePaymentsTable();
@@ -758,7 +715,6 @@ function registerResidentRoutes(app) {
         [id]
       );
 
-      // Build change diff and log
       const updated = rows2[0];
       const changes = {};
       const fieldMap = { house_number, title, first_name, last_name, phone, household_count, car_count, pay_months, area_sq_m };
@@ -772,7 +728,6 @@ function registerResidentRoutes(app) {
         }
       }
 
-      // Determine action: if only pay_months changed, mark as 'update_months'
       const changedKeys = Object.keys(changes);
       const action = changedKeys.length === 1 && changedKeys[0] === 'pay_months' ? 'update_months' : 'update';
       if (changedKeys.length > 0) {
@@ -797,8 +752,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  
-  // Delete
   app.delete('/residents/:id', authGuard, adminOnly, async (req, res) => {
     const id = Number(req.params.id);
     if (await ensureResidentsTable()) {
@@ -821,7 +774,6 @@ function registerResidentRoutes(app) {
           });
           return res.json({ ok: true, status: 'pending_approval' });
         } else if (role === 'superadmin') {
-          // Soft delete resident
           await pool.query('UPDATE residents SET deletion_status = "deleted", deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
           await insertResidentLog('delete', {
             residentId: id,
@@ -854,7 +806,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // Approvals waiting list for superadmin
   app.get('/residents/waiting-approval', authGuard, async (req, res) => {
     if (req.user?.role !== 'superadmin') return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
     try {
@@ -867,7 +818,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // Approve or Reject resident deletion
   app.patch('/residents/:id/deletion-status', authGuard, async (req, res) => {
     if (req.user?.role !== 'superadmin') return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
     const id = Number(req.params.id);
@@ -904,7 +854,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // Restore deleted resident (within 30 days)
   app.post('/residents/:id/restore', authGuard, async (req, res) => {
     if (req.user?.role !== 'superadmin') return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
     const id = Number(req.params.id);
@@ -935,8 +884,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // GET /houses - ดึงรายการบ้านเลขที่ทั้งหมด (สำหรับ dropdown)
-
   app.get('/houses', authGuard, async (req, res) => {
     try {
       await ensureHousesTable();
@@ -951,7 +898,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // GET /houses/validate/:houseNumber - ตรวจสอบว่าบ้านเลขที่มีอยู่ในระบบหรือไม่
   app.get('/houses/validate/:houseNumber', authGuard, async (req, res) => {
     try {
       await ensureHousesTable();
@@ -969,7 +915,6 @@ function registerResidentRoutes(app) {
     }
   });
 
-  // ============ Resident Logs API ============
   app.get('/resident-logs', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensureResidentLogsTable();
@@ -1020,7 +965,6 @@ function registerResidentRoutes(app) {
   });
 }
 
-// helper แปลงเดือน
 function normalizeMonths(v) {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;

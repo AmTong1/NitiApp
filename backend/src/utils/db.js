@@ -12,7 +12,6 @@ async function hasDb() {
 
 async function tableExists(name) {
   try {
-    // MySQL: use information_schema.tables with DATABASE()
     const [rows] = await pool.query(
       `SELECT 1 FROM information_schema.tables 
        WHERE table_name = ? AND table_schema = DATABASE()`,
@@ -24,12 +23,11 @@ async function tableExists(name) {
   }
 }
 
-const columnCache = new Map(); // "table.column" => boolean
+const columnCache = new Map();
 async function columnExists(table, column) {
   const key = `${table}.${column}`;
   if (columnCache.has(key)) return columnCache.get(key);
   try {
-    // MySQL: use information_schema.columns with DATABASE()
     const [rows] = await pool.query(
       `SELECT 1
          FROM information_schema.columns

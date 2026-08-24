@@ -4,7 +4,6 @@ const { pool } = require('../db/pool');
 const { authGuard, adminOnly } = require('../middleware/auth');
 const { hasDb } = require('../utils/db');
 
-// Ensure table exists on load
 async function ensureFinancialTable() {
   if (!(await hasDb())) return false;
   try {
@@ -24,7 +23,6 @@ async function ensureFinancialTable() {
       )
     `);
 
-    // Ensure status column exists for older tables
     try {
       await pool.query("ALTER TABLE financial_records ADD COLUMN status ENUM('approved', 'waiting_add', 'waiting_delete', 'rejected') NOT NULL DEFAULT 'approved'");
     } catch (ignore) {}
@@ -52,10 +50,8 @@ async function ensureFinancialVisibilityTable() {
       )
     `);
 
-    // Insert default 'hide' approved row if table is empty
     const [rows] = await pool.query('SELECT COUNT(*) as cnt FROM financial_visibility_logs');
     if (rows[0].cnt === 0) {
-      // Find the first superadmin to set as creator
       const [admins] = await pool.query("SELECT id FROM accounts WHERE role = 'superadmin' LIMIT 1");
       const creatorId = admins.length > 0 ? admins[0].id : 1;
       await pool.query(
@@ -70,7 +66,6 @@ async function ensureFinancialVisibilityTable() {
   }
 }
 
-// Get unified query strings for reusability
 const unifiedTransactionsSql = `
   SELECT 
     f.id, 
@@ -105,13 +100,11 @@ function registerFinancialRoutes(app) {
   ensureFinancialTable().catch(() => {});
   ensureFinancialVisibilityTable().catch(() => {});
 
-  // 0. Get Visibility Status
   app.get('/financial/visibility', authGuard, async (req, res) => {
     try {
       const ok = await ensureFinancialVisibilityTable();
       if (!ok) return res.status(500).json({ ok: false, error: 'DB_NOT_READY' });
 
-      // Get the latest approved status
       const [approvedRows] = await pool.query(
         "SELECT action FROM financial_visibility_logs WHERE status = 'approved' ORDER BY id DESC LIMIT 1"
       );
@@ -134,7 +127,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 0.1 Toggle Visibility Status (Admin/Superadmin)
   app.post('/financial/visibility/toggle', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensureFinancialVisibilityTable();
@@ -150,7 +142,6 @@ function registerFinancialRoutes(app) {
       let approvedBy = null;
       let approvedAt = null;
 
-      // Check if there's already a pending request
       const [pendingRows] = await pool.query(
         "SELECT id FROM financial_visibility_logs WHERE status = 'waiting_approval' LIMIT 1"
       );
@@ -176,7 +167,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 0.2 Update Visibility Request Status (Superadmin only)
   app.patch('/financial/visibility/requests/:id/status', authGuard, async (req, res) => {
     try {
       if (req.user?.role !== 'superadmin') {
@@ -206,7 +196,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 0.3 Get Visibility Logs (Admin/Superadmin)
   app.get('/financial/visibility/logs', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensureFinancialVisibilityTable();
@@ -231,7 +220,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 1. Get Summary (Total Income, Total Expense, Balance)
   app.get('/financial/summary', authGuard, async (req, res) => {
     try {
       const ok = await ensureFinancialTable();
@@ -261,7 +249,6 @@ function registerFinancialRoutes(app) {
       const income = Number(rows[0]?.total_income || 0);
       const expense = Number(rows[0]?.total_expense || 0);
 
-      // Calculate all-time balance regardless of filter
       const sqlAllTime = `
         SELECT 
           SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
@@ -289,7 +276,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 2. Get Transactions List
   app.get('/financial/transactions', authGuard, async (req, res) => {
     try {
       const ok = await ensureFinancialTable();
@@ -297,7 +283,7 @@ function registerFinancialRoutes(app) {
 
       const isAdmin = req.user?.role === 'admin' || req.user?.role === 'superadmin';
 
-      const filterType = req.query.filter || 'all'; // 'all', 'month', 'week'
+      const filterType = req.query.filter || 'all';
       let dateFilter = isAdmin 
         ? "WHERE status IN ('approved', 'waiting_add', 'waiting_delete')" 
         : "WHERE status IN ('approved', 'waiting_delete')";
@@ -325,20 +311,19 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 3. Get Chart Data
   app.get('/financial/chart', authGuard, async (req, res) => {
     try {
       const ok = await ensureFinancialTable();
       if (!ok) return res.status(500).json({ ok: false, error: 'DB_NOT_READY' });
 
-      const filterType = req.query.filter || 'month'; // 'month', 'week'
+      const filterType = req.query.filter || 'month';
       let groupBy = '';
       let dateFilter = "WHERE status IN ('approved', 'waiting_delete')";
       
       if (filterType === 'month') {
         dateFilter += " AND date >= DATE_FORMAT(NOW() ,'%Y-%m-01')";
         groupBy = 'DATE(date)';
-      } else { // week
+      } else {
         dateFilter += " AND date >= DATE_ADD(DATE(NOW()), INTERVAL - WEEKDAY(NOW()) DAY)";
         groupBy = 'DATE(date)';
       }
@@ -364,7 +349,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 4. Add Record (Admin/SuperAdmin)
   app.post('/financial/records', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensureFinancialTable();
@@ -402,7 +386,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 5. Delete Record (Admin/SuperAdmin)
   app.delete('/financial/records/:id', authGuard, adminOnly, async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -429,13 +412,12 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 6. Export Records (Admin/SuperAdmin)
   app.get('/financial/export', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensureFinancialTable();
       if (!ok) return res.status(500).json({ ok: false, error: 'DB_NOT_READY' });
 
-      const filterType = req.query.filter || 'all'; // 'all', 'month', 'week'
+      const filterType = req.query.filter || 'all';
       let dateFilter = "WHERE status IN ('approved', 'waiting_delete')";
       if (filterType === 'month') {
         dateFilter += " AND date >= DATE_FORMAT(NOW() ,'%Y-%m-01')";
@@ -453,7 +435,6 @@ function registerFinancialRoutes(app) {
 
       const [rows] = await pool.query(sql);
 
-      // Create HTML-based Excel content
       let htmlContent = `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
@@ -510,7 +491,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 7. Get Waiting Approvals (SuperAdmin/Admin)
   app.get('/financial/waiting-approval', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensureFinancialTable();
@@ -532,7 +512,6 @@ function registerFinancialRoutes(app) {
     }
   });
 
-  // 8. Update Status (SuperAdmin only)
   app.patch('/financial/records/:id/status', authGuard, async (req, res) => {
     try {
       if (req.user?.role !== 'superadmin') {
@@ -547,7 +526,6 @@ function registerFinancialRoutes(app) {
         return res.status(400).json({ ok: false, error: 'INVALID_STATUS' });
       }
 
-      // Check current status
       const [rows] = await pool.query('SELECT status FROM financial_records WHERE id = ?', [id]);
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
       

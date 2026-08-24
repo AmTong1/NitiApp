@@ -5,7 +5,6 @@ const { authGuard } = require('../middleware/auth');
 const { JWT_SECRET, JWT_EXPIRES } = require('../config/env');
 const { isSuperAdmin } = require('../utils/misc');
 
-// Helper: parse Thai full name into { title, firstName, lastName }
 function parseThaiFullName(raw) {
   if (!raw || typeof raw !== 'string') return { title: null, firstName: null, lastName: null };
   let s = raw.trim().replace(/\s+/g, ' ');
@@ -81,7 +80,6 @@ function registerAuthRoutes(app) {
       );
       const acc = rows[0] || null;
       if (acc) {
-        // เพิ่ม house_number และ ชื่อจาก residents table
         const [resRows] = await pool.query(
           'SELECT house_number, title, first_name, last_name, phone FROM residents WHERE account_id = ? LIMIT 1',
           [id]
@@ -89,14 +87,11 @@ function registerAuthRoutes(app) {
         const resident = resRows[0];
         acc.house_number = resident?.house_number || null;
         
-        // ส่ง title, first_name, last_name แยกกัน
-        // ถ้า residents มีข้อมูล ใช้จาก residents
         if (resident?.title || resident?.first_name || resident?.last_name) {
           acc.title = resident?.title || '';
           acc.first_name = resident?.first_name || '';
           acc.last_name = resident?.last_name || '';
         } else if (acc.full_name) {
-          // ถ้า residents ไม่มี แต่ accounts.full_name มี ให้ parse ออกมา
           const parsed = parseThaiFullName(acc.full_name);
           acc.title = parsed.title || '';
           acc.first_name = parsed.firstName || '';
@@ -107,13 +102,11 @@ function registerAuthRoutes(app) {
           acc.last_name = '';
         }
         
-        // ถ้า accounts.full_name ว่าง ให้ใช้ชื่อจาก residents แทน
         if (!acc.full_name && resident) {
           const parts = [resident.title, resident.first_name, resident.last_name].filter(Boolean);
           acc.full_name = parts.join(' ') || null;
         }
         
-        // เพิ่ม phone ด้วย
         acc.phone = resident?.phone || null;
       }
       res.json(acc);
@@ -123,25 +116,21 @@ function registerAuthRoutes(app) {
     }
   });
 
-  // Update profile (title, first_name, last_name, phone)
   app.put('/auth/me', authGuard, async (req, res) => {
     try {
       const { id } = req.user;
       const { title, first_name, last_name, phone } = req.body || {};
       
-      // Update residents (title, first_name, last_name, phone)
       const [resRows] = await pool.query('SELECT id FROM residents WHERE account_id = ? LIMIT 1', [id]);
       const resident = resRows[0];
       
       if (resident) {
-        // อัพเดท title, first_name, last_name ถ้ามีส่งมา
         if (title !== undefined || first_name !== undefined || last_name !== undefined) {
           await pool.query(
             'UPDATE residents SET title = COALESCE(?, title), first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?', 
             [title || null, first_name || null, last_name || null, resident.id]
           );
           
-          // อัพเดท accounts.full_name ด้วย
           const fullName = [title, first_name, last_name].filter(Boolean).join(' ') || null;
           await pool.query('UPDATE accounts SET full_name = ? WHERE id = ?', [fullName, id]);
         }
@@ -154,7 +143,6 @@ function registerAuthRoutes(app) {
         }
       }
       
-      // Return updated data
       const [rows] = await pool.query(
         'SELECT id, username, full_name, role, created_at FROM accounts WHERE id = ?',
         [id]
@@ -184,7 +172,6 @@ function registerAuthRoutes(app) {
     }
   });
 
-  // Change password
   app.put('/auth/me/password', authGuard, async (req, res) => {
     try {
       const { id } = req.user;
@@ -215,10 +202,8 @@ function registerAuthRoutes(app) {
     res.json({ message: 'Protected route', user: req.user });
   });
 
-  // ===== SuperAdmin: Create Admin =====
   app.post('/auth/create-admin', authGuard, async (req, res) => {
     try {
-      // Only superadmin can create admin
       if (!isSuperAdmin(req.user)) {
         return res.status(403).json({ error: 'SUPERADMIN_ONLY' });
       }
@@ -231,7 +216,6 @@ function registerAuthRoutes(app) {
         return res.status(400).json({ error: 'PASSWORD_TOO_SHORT' });
       }
 
-      // Check if username already exists
       const [existing] = await pool.query('SELECT id FROM accounts WHERE username = ?', [username]);
       if (existing.length > 0) {
         return res.status(409).json({ error: 'USERNAME_EXISTS' });
@@ -251,7 +235,6 @@ function registerAuthRoutes(app) {
     }
   });
 
-  // ===== SuperAdmin: List all admins =====
   app.get('/auth/admins', authGuard, async (req, res) => {
     try {
       if (!isSuperAdmin(req.user)) {
@@ -269,7 +252,6 @@ function registerAuthRoutes(app) {
     }
   });
 
-  // ===== SuperAdmin: Delete admin =====
   app.delete('/auth/admins/:id', authGuard, async (req, res) => {
     try {
       if (!isSuperAdmin(req.user)) {
@@ -278,12 +260,10 @@ function registerAuthRoutes(app) {
 
       const adminId = Number(req.params.id);
       
-      // Cannot delete self
       if (adminId === req.user.id) {
         return res.status(400).json({ error: 'CANNOT_DELETE_SELF' });
       }
 
-      // Check if target is superadmin (cannot delete superadmin)
       const [target] = await pool.query('SELECT role FROM accounts WHERE id = ?', [adminId]);
       if (!target[0]) {
         return res.status(404).json({ error: 'NOT_FOUND' });
@@ -299,7 +279,6 @@ function registerAuthRoutes(app) {
       res.status(500).json({ error: 'SERVER_ERROR' });
     }
   });
-  // ===== SuperAdmin: Update admin =====
   app.put('/auth/admins/:id', authGuard, async (req, res) => {
     try {
       if (!isSuperAdmin(req.user)) {
@@ -309,29 +288,24 @@ function registerAuthRoutes(app) {
       const adminId = Number(req.params.id);
       const { full_name, password } = req.body || {};
 
-      // Check if target exists
       const [target] = await pool.query('SELECT role FROM accounts WHERE id = ?', [adminId]);
       if (!target[0]) {
         return res.status(404).json({ error: 'NOT_FOUND' });
       }
       
-      // Prevent modifying other SuperAdmins (unless self, but usually superadmin edits self via /me)
       if (target[0].role === 'superadmin' && adminId !== req.user.id) {
         return res.status(403).json({ error: 'CANNOT_EDIT_SUPERADMIN' });
       }
 
-      // Update full_name
       if (full_name !== undefined) {
          await pool.query('UPDATE accounts SET full_name = ? WHERE id = ?', [full_name, adminId]);
       }
 
-      // Update password if provided
       if (password && String(password).length >= 6) {
         const hash = await bcrypt.hash(String(password), 10);
         await pool.query('UPDATE accounts SET password_hash = ? WHERE id = ?', [hash, adminId]);
       }
 
-      // Return updated info
       const [updated] = await pool.query('SELECT id, username, full_name, role, created_at FROM accounts WHERE id = ?', [adminId]);
       res.json({ ok: true, admin: updated[0] });
 

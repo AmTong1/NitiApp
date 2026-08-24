@@ -3,7 +3,6 @@ const { authGuard, adminOnly } = require('../middleware/auth');
 const { hasDb, tableExists, columnExists, indexExists } = require('../utils/db');
 const { HOST, PORT } = require('../config/env');
 
-// ============ Announcement Logs Helpers ============
 async function ensureAnnouncementLogsTable() {
   if (!(await hasDb())) return false;
   try {
@@ -67,10 +66,8 @@ function mapImage(item) {
 }
 
 function registerAnnouncementRoutes(app) {
-  // Init logs table on startup
   ensureAnnouncementLogsTable();
 
-  // List
   app.get('/announcements', async (req, res) => {
     if (await dbReady()) {
       try {
@@ -97,7 +94,6 @@ function registerAnnouncementRoutes(app) {
     }
   });
 
-  // Get by id
   app.get('/announcements/:id', async (req, res) => {
     const id = Number(req.params.id);
     if (await dbReady()) {
@@ -123,7 +119,6 @@ function registerAnnouncementRoutes(app) {
     }
   });
 
-  // Create
   app.post('/announcements', authGuard, adminOnly, async (req, res) => {
     const { title, date, image, important, description } = req.body || {};
     if (!title || !date) return res.status(400).json({ ok: false, error: 'INVALID_BODY' });
@@ -149,7 +144,6 @@ function registerAnnouncementRoutes(app) {
         const [result] = await pool.query(sql, values);
         const insertId = result.insertId;
 
-        // Log create
         const logChanges = { title: { new: title }, date: { new: date } };
         if (image) logChanges.image = { new: image };
         if (description) logChanges.description = { new: description };
@@ -178,13 +172,11 @@ function registerAnnouncementRoutes(app) {
     }
   });
 
-  // Update
   app.put('/announcements/:id', authGuard, adminOnly, async (req, res) => {
     const id = Number(req.params.id);
     const { title, date, image, important, description } = req.body || {};
     if (await dbReady()) {
       try {
-        // Fetch old data before update
         const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = ?', [id]);
         const oldData = oldRows[0] || {};
 
@@ -205,7 +197,6 @@ function registerAnnouncementRoutes(app) {
           params
         );
 
-        // Build diff for log
         const diffFields = { title, date, image, description, important };
         const changes = {};
         for (const [k, v] of Object.entries(diffFields)) {
@@ -249,18 +240,15 @@ function registerAnnouncementRoutes(app) {
     }
   });
 
-  // Delete
   app.delete('/announcements/:id', authGuard, adminOnly, async (req, res) => {
     const id = Number(req.params.id);
     if (await dbReady()) {
       try {
-        // Fetch old data before delete
         const [oldRows] = await pool.query('SELECT * FROM announcements WHERE id = ?', [id]);
         const oldData = oldRows[0];
 
         await pool.query('DELETE FROM announcements WHERE id = ?', [id]);
 
-        // Log delete
         if (oldData) {
           const changes = {};
           if (oldData.title) changes.title = { old: oldData.title };
@@ -283,7 +271,6 @@ function registerAnnouncementRoutes(app) {
     }
   });
 
-  // ============ Announcement Logs API ============
   app.get('/announcement-logs', authGuard, adminOnly, async (req, res) => {
     try {
       const ok = await ensureAnnouncementLogsTable();

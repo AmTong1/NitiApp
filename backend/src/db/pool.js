@@ -90,10 +90,8 @@ async function withTransientRetry(operation, { retries = 1, label = "query" } = 
   throw lastErr;
 }
 
-// Keep the same export structure to minimize refactoring
 const poolWrapper = {
   async query(text, params) {
-    // SQL placeholders use mysql2 style: ?
     const [rows, fields] = await withTransientRetry(
       () => getPool().query(text, params),
       { retries: 1, label: "query" }

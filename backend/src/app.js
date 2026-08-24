@@ -150,7 +150,6 @@ function buildApp(io) {
     try {
       targetPath = decodeURIComponent(targetPath);
     } catch {
-      // Keep original value.
     }
 
     try {
@@ -159,7 +158,6 @@ function buildApp(io) {
         targetPath = `${parsed.pathname}${parsed.search}`;
       }
     } catch {
-      // Ignore parse errors and validate below.
     }
 
     targetPath = targetPath.replace(/\/+$/, '');
@@ -286,12 +284,10 @@ function buildApp(io) {
     res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
   };
 
-  // static
   app.use('/uploads', express.static(UPLOAD_DIR, { setHeaders: setInlinePdfHeaders }));
   app.use('/qrs', express.static(QR_DIR));
   app.use('/pdfs', express.static(PDF_DIR, { setHeaders: setInlinePdfHeaders }));
 
-  // routes
   registerSettingsRoutes(app);
   registerAuthRoutes(app);
   registerSlipOkRoutes(app);

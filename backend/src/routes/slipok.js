@@ -241,7 +241,6 @@ function tryParseJsonObject(input) {
     const parsed = JSON.parse(input);
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
   } catch {
-    // Ignore invalid JSON.
   }
   return null;
 }
@@ -312,7 +311,6 @@ async function getRuntimePromptPayId(app) {
   return '';
 }
 
-// รองรับทั้ง base URL และ endpoint เต็มของ Slip2Go
 const resolveSlip2GoUrl = (apiBase) => {
   const base = normalize(apiBase || '');
   const defaultEndpoint = 'https://api.slip2go.com/api/verify-slip/qr-code/info';
@@ -423,7 +421,6 @@ async function postWithCandidateUrls(urls, requestFactory) {
 function registerSlipOkRoutes(app) {
   app.post('/upload-and-check', upload.single('file'), async (req, res) => {
     try {
-      // Priority: system_settings (new keys -> legacy keys) -> .env
       const slip2goSecret =
         toNonEmptyString(await getRuntimeSetting(app, 'slip2go_secret', ''))
         || toNonEmptyString(await getRuntimeSetting(app, 'slipok_key', ''))
@@ -448,7 +445,6 @@ function registerSlipOkRoutes(app) {
       let providerMode = 'base64';
       let providerEndpoint = '';
 
-      // ===== Compress image + convert to base64 if file uploaded =====
       let resp;
       if (req.file) {
         providerMode = 'image';
@@ -470,7 +466,6 @@ function registerSlipOkRoutes(app) {
         directImageBase64 = normalizeImageBase64(compressedBuffer.toString('base64'));
       }
 
-      // ===== ส่ง base64 ไปตรวจผ่าน qr-base64/info =====
       const imageBase64 = directImageBase64;
       if (!imageBase64) {
         return res.status(400).json({
@@ -511,14 +506,12 @@ function registerSlipOkRoutes(app) {
       console.log('[slip-check] DEBUG response status:', resp?.status);
       console.log('[slip-check] DEBUG response data:', JSON.stringify(resp?.data, null, 2));
 
-      // ===== ดึงค่าที่ต้องการ =====
       const payload = resp?.data || {};
       const providerCode = String(payload?.code || '');
       const d = payload?.data || {};
       const slipSuccess = ['200000', '200200'].includes(providerCode);
       const slipDuplicate = providerCode === '200501';
 
-      // สลิปซ้ำ (200501) ยังมี data กลับมาให้ตรวจ receiver/amount ได้
       if (!slipSuccess && !slipDuplicate) {
         if (providerCode === '200404') {
           return res.status(400).json({
@@ -581,11 +574,9 @@ function registerSlipOkRoutes(app) {
 
       let intentForCleanup = null;
 
-      // อ่าน intentId ที่ส่งมาด้วย (multipart field: intentId หรือ intent_id)
       const intentId =
         Number(req.body?.intentId || req.body?.intent_id || req.query?.intentId || 0) || null;
 
-      // amount บนสลิป (ถ้ามี) หรือจากฟอร์ม
       const amount =
         d?.amount != null && !Number.isNaN(Number(d.amount))
           ? Number(d.amount)
@@ -618,7 +609,6 @@ function registerSlipOkRoutes(app) {
         }
       }
 
-      // slip_datetime: full datetime จากสลิป (MySQL format)
       let slipDatetime = null;
       if (dateTimeRaw) {
         const dt = new Date(dateTimeRaw);
@@ -627,9 +617,7 @@ function registerSlipOkRoutes(app) {
         }
       }
 
-      // ===== Validation (ทำทั้ง success และ duplicate เพราะ 200501 ก็มี data) =====
       if (slipSuccess || slipDuplicate) {
-        // 1) ตรวจชื่อบัญชีผู้รับ
         const expectedReceiverName = toNonEmptyString(
           await getRuntimeSetting(app, 'receiver_name', '')
         ).toUpperCase();
@@ -651,7 +639,6 @@ function registerSlipOkRoutes(app) {
           });
         }
 
-        // 2) ตรวจจำนวนเงินตรงกับ payment_intents (ถ้าระบุ intentId)
         if (intentId) {
           const [rows] = await pool.query(
             `SELECT id, installment_id, payment_id, house_number, amount, method, status, qr_id,
@@ -701,7 +688,6 @@ function registerSlipOkRoutes(app) {
           }
         }
 
-        // 3) ตรวจเลขปลายทาง PromptPay จากสลิป (4 ตัวท้าย)
         const promptpayId = await getRuntimePromptPayId(app);
         const ppLast4 = promptpayId.slice(-4);
         const recvVal = String(
@@ -730,7 +716,6 @@ function registerSlipOkRoutes(app) {
         }
       }
 
-      // หากเป็นสลิปซ้ำ (ผ่าน validation แล้ว) → reject
       if (slipDuplicate) {
         return res.status(409).json({
           ok: false,
@@ -739,9 +724,7 @@ function registerSlipOkRoutes(app) {
           provider: payload,
         });
       }
-      // ===== End Validation =====
 
-      // เช็คซ้ำด้วย qrcodeData ก่อนบันทึก
       const qrKey = (qrcodeData || '').trim();
       if (qrKey) {
         try {
@@ -763,7 +746,6 @@ function registerSlipOkRoutes(app) {
         }
       }
 
-      // บันทึกลง DB
       let insertedId = null;
       try {
         const [r] = await pool.query(
@@ -854,7 +836,6 @@ function registerSlipOkRoutes(app) {
         providerMode,
         providerEndpoint: providerEndpoint || null,
         slip2go: payload,
-        // Backward compatibility for existing mobile clients.
         slipok: payload,
         saved: { id: insertedId, amount, qrcodeData, sendingBank, senderName, slipDatetime, transDate, transTime },
         receiptImage,

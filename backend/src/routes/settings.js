@@ -2,10 +2,8 @@ const { pool } = require('../db/pool');
 const { authGuard } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../utils/crypto');
 
-// Keys that should be encrypted
 const ENCRYPTED_KEYS = ['slip2go_api', 'slip2go_secret', 'slipok_api', 'slipok_key', 'promptpay_id'];
 
-// Default settings (from .env or hardcoded defaults)
 const DEFAULT_SETTINGS = {
   rate_per_sqm: process.env.RATE_PER_SQM || '10.00',
   slip2go_api: process.env.SLIP2GO_API || process.env.SLIPOK_API || '',
@@ -35,12 +33,10 @@ async function ensureSettingsTable() {
 }
 
 function registerSettingsRoutes(app) {
-  // Ensure table exists and has default values
   (async () => {
     try {
       await ensureSettingsTable();
 
-      // Insert default settings if not exists
       for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
         const isEncrypted = ENCRYPTED_KEYS.includes(key);
         const storedValue = isEncrypted ? encrypt(value) : value;
@@ -55,7 +51,6 @@ function registerSettingsRoutes(app) {
     }
   })();
 
-  // GET /settings - Get all settings (SuperAdmin only)
   app.get('/settings', authGuard, async (req, res) => {
     try {
       await ensureSettingsTable();
@@ -69,7 +64,6 @@ function registerSettingsRoutes(app) {
       const settings = {};
       if (rows && Array.isArray(rows)) {
         for (const row of rows) {
-          // Decrypt if encrypted
           if (row.is_encrypted) {
             settings[row.key] = decrypt(row.value);
           } else {
@@ -78,7 +72,6 @@ function registerSettingsRoutes(app) {
         }
       }
 
-      // Fallback legacy values to new Slip2Go keys for old databases.
       if (!settings.slip2go_api && settings.slipok_api) {
         settings.slip2go_api = settings.slipok_api;
       }
@@ -93,7 +86,6 @@ function registerSettingsRoutes(app) {
     }
   });
 
-  // PUT /settings - Update settings (SuperAdmin only)
   app.put('/settings', authGuard, async (req, res) => {
     try {
       await ensureSettingsTable();
@@ -106,7 +98,6 @@ function registerSettingsRoutes(app) {
       console.log('[Settings] Received updates:', updates, 'updateExisting:', updateExisting);
       const allowedKeys = Object.keys(DEFAULT_SETTINGS);
 
-      // Keep new and legacy keys mirrored to avoid breaking older clients/routes.
       if (Object.prototype.hasOwnProperty.call(updates, 'slip2go_api')
         && !Object.prototype.hasOwnProperty.call(updates, 'slipok_api')) {
         updates.slipok_api = updates.slip2go_api;
@@ -172,12 +163,10 @@ function registerSettingsRoutes(app) {
         );
       }
 
-      // If updateExisting is true and rate_per_sqm changed, update all payments
       if (updateExisting && updates.rate_per_sqm) {
         const newRate = parseFloat(updates.rate_per_sqm);
         console.log(`[Settings] Updating all payments with new rate: ${newRate}`);
         
-        // Update rate_per_sqm, amount_per_month, and total_amount for all payments
         await pool.query(
           'UPDATE payments ' +
           'SET rate_per_sqm = ?, ' +
@@ -186,8 +175,6 @@ function registerSettingsRoutes(app) {
           [newRate, newRate, newRate]
         );
         
-        // Update pending payment_installments based on the newly calculated amount_per_month
-        // Also apply discounts from discount_configs if available
         await pool.query(
           `UPDATE payment_installments pi
            JOIN payments p ON pi.payment_id = p.id
@@ -220,7 +207,6 @@ function registerSettingsRoutes(app) {
     }
   });
 
-  // Helper: Get a single setting value (for internal use)
   app.getSetting = async (key) => {
     try {
       await ensureSettingsTable();

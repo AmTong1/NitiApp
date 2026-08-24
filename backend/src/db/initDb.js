@@ -1,7 +1,3 @@
-/**
- * Database initialization script
- * Auto-creates database and runs schema.sql if tables don't exist
- */
 const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
@@ -53,7 +49,6 @@ async function ensureDatabase() {
   try {
     console.log('[initDb] Connected to MySQL server');
     
-    // Create database if not exists
     await adminConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
     console.log(`[initDb] Database '${dbName}' ensured`);
     
@@ -79,13 +74,12 @@ async function runSchema() {
     user: DB.user || 'root',
     password: DB.password || '',
     database: dbName,
-    multipleStatements: true // Required for running schema.sql
+    multipleStatements: true
   });
 
   try {
     console.log(`[initDb] Connected to database '${dbName}'`);
 
-    // Normalize escaped identifier quotes that may have been copied into schema.sql.
     const schemaSql = fs.readFileSync(schemaPath, 'utf8').replace(/\\`/g, '`');
     
     console.log('[initDb] Running schema.sql...');
@@ -93,14 +87,11 @@ async function runSchema() {
     console.log('[initDb] Schema applied successfully');
     await ensureCriticalIndexes(dbConnection);
 
-    // --- Migrations for existing databases ---
     try {
-      // Widen sending_bank to fit full bank names
       await dbConnection.query(
         `ALTER TABLE slipok_verifications MODIFY COLUMN sending_bank VARCHAR(128) NULL`
       ).catch(() => {});
 
-      // Helper: add column if not exists
       const addColIfMissing = async (col, definition, after) => {
         const [cols] = await dbConnection.query(
           `SELECT 1 FROM information_schema.columns
@@ -125,7 +116,6 @@ async function runSchema() {
 
   } catch (err) {
     console.error('[initDb] Error running schema:', err.message);
-    // Don't throw - allow server to continue even if schema has issues
   } finally {
     await dbConnection.end();
   }

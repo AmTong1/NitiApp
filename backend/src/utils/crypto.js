@@ -3,7 +3,6 @@ const crypto = require('crypto');
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 
-// สร้าง key จาก JWT_SECRET (hash เป็น 32 bytes)
 function getKey() {
   return crypto
     .createHash('sha256')
@@ -11,7 +10,6 @@ function getKey() {
     .digest();
 }
 
-// เข้ารหัส
 function encrypt(text) {
   if (!text) return '';
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -22,7 +20,6 @@ function encrypt(text) {
   return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted}`;
 }
 
-// ถอดรหัส
 function decrypt(data) {
   if (!data || !data.includes(':')) return data;
   try {
@@ -36,7 +33,7 @@ function decrypt(data) {
     return decrypted;
   } catch (e) {
     console.error('Decrypt error:', e.message);
-    return data; // Return original if decrypt fails
+    return data;
   }
 }
 

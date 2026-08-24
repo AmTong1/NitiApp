@@ -19,7 +19,6 @@ const fs = require('fs-extra');
 const path = require('path');
 const { regenerateInstallmentsForPayment } = require('./payments');
 const { getDiscountForCycle, applyDiscountToAmount } = require('./discount');
-// Configure Multer
 const uploadDir = path.join(__dirname, '../../uploads/proofs');
 fs.ensureDirSync(uploadDir);
 
@@ -88,7 +87,6 @@ function sendInvalidPromptPayConfig(req, res) {
 
 async function ensureProofImageColumn() {
   try {
-    // Check if column exists
     const [rows] = await pool.query(
       `SELECT column_name FROM information_schema.columns 
        WHERE table_name = 'payment_installments' AND column_name = 'proof_image'`
@@ -98,7 +96,6 @@ async function ensureProofImageColumn() {
       console.log('Added proof_image column to payment_installments');
     }
     
-    // Check for paid_by column
     const [rows2] = await pool.query(
       `SELECT column_name FROM information_schema.columns 
        WHERE table_name = 'payment_installments' AND column_name = 'paid_by'`
@@ -108,7 +105,6 @@ async function ensureProofImageColumn() {
       console.log('Added paid_by column to payment_installments');
     }
 
-    // Check for approved_by column
     const [rows3] = await pool.query(
       `SELECT column_name FROM information_schema.columns 
        WHERE table_name = 'payment_installments' AND column_name = 'approved_by'`
@@ -135,7 +131,6 @@ async function refreshInstallmentStatuses() {
   }
 }
 
-// ตั้ง job ให้รันทุกวันหลังเที่ยงคืน (00:10 น.) ตามเวลาเครื่องเซิร์ฟเวอร์
 function startDailyInstallmentStatusJob() {
   const scheduleNext = () => {
     const now = new Date();
@@ -146,11 +141,9 @@ function startDailyInstallmentStatusJob() {
       scheduleNext();
     }, delay);
   };
-  // รันครั้งแรกตอนบูต
   refreshInstallmentStatuses().finally(scheduleNext);
 }
 
-// helper เพิ่มเดือนแบบปลอดภัย (ปลายเดือน)
 function addMonthsSafe(date, months) {
   const d = new Date(date.getTime());
   const day = d.getDate();
@@ -219,7 +212,6 @@ async function ensureNextYearInstallments(paymentId, app) {
       if (Number.isFinite(n)) leadDays = Math.max(0, Math.min(365, Math.floor(n)));
     }
   } catch (e) {
-    // fallback to default 0 days
   }
 
   const today = new Date();
@@ -228,7 +220,6 @@ async function ensureNextYearInstallments(paymentId, app) {
   const triggerDate = new Date(todayOnly.getTime());
   triggerDate.setDate(triggerDate.getDate() + leadDays);
 
-  // ยังไม่เข้าเงื่อนไข (ภายใน leadDays) ไม่ต้องสร้างงวดเพิ่ม
   if (lastPeriodOnly > triggerDate) {
     return { ok: true, appended: 0, seeded: false };
   }
@@ -236,7 +227,6 @@ async function ensureNextYearInstallments(paymentId, app) {
   const count = 12 / months;
   const baseAmountPerInstallment = Number(p.amount_per_month || 0) * months;
 
-  // Apply discount if configured for this cycle
   const discount = await getDiscountForCycle(months);
   const amountPerInstallment = discount ? applyDiscountToAmount(baseAmountPerInstallment, discount) : baseAmountPerInstallment;
   const discountAmt = discount ? Math.round((baseAmountPerInstallment - amountPerInstallment) * 100) / 100 : 0;
@@ -273,7 +263,6 @@ async function ensureNextYearInstallments(paymentId, app) {
 }
 
 function registerPromptPayRoutes(app) {
-  // Ensure new columns exist on startup
   ensureProofImageColumn().catch(e => console.error('ensureProofImageColumn on boot:', e.message));
   purgeExpiredQRCodes().catch((e) => console.warn('[qr] initial purge failed:', e.message));
   const purgeTimer = setInterval(() => {
@@ -409,9 +398,7 @@ function registerPromptPayRoutes(app) {
         payload,
       });
 
-      // รับ intentId จาก query
       const intentId = req.query.intentId ? Number(req.query.intentId) : null;
-      // หลังสร้าง QR สำเร็จ (ได้ qrId/url/payload) ให้ update intent (ถ้ามี)
       if (intentId) await attachIntentToQR(intentId, record);
 
       return res.json(respondQr(req, record, {
@@ -427,7 +414,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // GET /payments/latest?house_number=xxx หรือ ?house_id=123
   app.get('/payments/latest', async (req, res) => {
     try {
       const houseNumber = String(req.query.house_number || '').trim();
@@ -465,7 +451,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // POST /payments/:id/installments/regenerate
   app.post('/payments/:id/installments/regenerate', async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -480,7 +465,7 @@ function registerPromptPayRoutes(app) {
 
   app.patch('/payment-installments/:id', authGuard, upload.single('file'), async (req, res) => {
     try {
-      await ensureProofImageColumn(); // Ensure column exists before update
+      await ensureProofImageColumn();
 
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ ok: false, message: 'invalid id' });
@@ -493,19 +478,16 @@ function registerPromptPayRoutes(app) {
       const methodAllowed = new Set(['cash', 'promptpay', 'bank_transfer']);
       const method = methodRaw && methodAllowed.has(methodRaw) ? methodRaw : null;
       const note = req.body?.paid_note ? String(req.body.paid_note) : null;
-      const paidBy = req.user?.username || 'System'; // Get username from token
+      const paidBy = req.user?.username || 'System';
       const approvedBy = req.user?.username || req.user?.full_name || (req.user?.id != null ? String(req.user.id) : null);
       
       let proofPath = null;
       if (req.file) {
-        // Save relative path
         proofPath = 'uploads/proofs/' + req.file.filename;
       }
 
       let sql, params;
       if (status === 'paid') {
-        // เมื่ออนุมัติ (paid): เก็บ approved_by = คนที่กดอนุมัติ, คง paid_by เดิม (ถ้ามี)
-        // ถ้า paid_by ยังว่างอยู่ (จ่ายเงินสดตรง ไม่ผ่าน waiting) ให้ใช้ paidBy
         if (proofPath) {
           sql = `
             UPDATE payment_installments
@@ -526,7 +508,6 @@ function registerPromptPayRoutes(app) {
           params = [method, note, paidBy, approvedBy, id];
         }
       } else if (status === 'waiting_approval') {
-        // ผู้ใช้ส่งหลักฐาน: เก็บ paid_by = คนที่ส่ง
         const updateParams = [method, note, paidBy];
         let proofSql = '';
         if (proofPath) {
@@ -557,13 +538,11 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // ensure installments API returns paid_method/paid_note
   app.get('/payments/:id/installments', async (req, res) => {
     try {
       const id = Number(req.params.id);
       if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, message: 'invalid payment id' });
 
-      // ถ้าครบรอบ 1 ปีล่าสุดแล้ว ให้ต่อชุดงวดปีถัดไปอัตโนมัติ
       try {
         await ensureNextYearInstallments(id, app);
       } catch (e) {
@@ -585,7 +564,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // POST /payments/installments/regenerate-latest?house_number=H001
   app.post('/payments/installments/regenerate-latest', async (req, res) => {
     try {
       const houseNumber = String(req.query.house_number || '').trim();
@@ -603,16 +581,13 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // GET /payment-installments/latest?search=587&limit=300
-  // ดึงงวดล่าสุด (recent) ของแต่ละบ้านจากตาราง payment_installments
   app.get('/payment-installments/latest', async (req, res) => {
     try {
       const search = String(req.query.search || '').trim();
       const limit = Math.max(1, Math.min(1000, Number(req.query.limit || 300)));
-      const month = req.query.month ? Number(req.query.month) : null; // 1-12
-      const year = req.query.year ? Number(req.query.year) : null;    // YYYY
+      const month = req.query.month ? Number(req.query.month) : null;
+      const year = req.query.year ? Number(req.query.year) : null;
 
-      // เงื่อนไข Filter เพิ่มเติม
       const conditions = [];
       const params = [];
 
@@ -621,22 +596,10 @@ function registerPromptPayRoutes(app) {
         params.push(`%${search}%`);
       }
 
-      // ถ้ามี month/year: กรองเฉพาะ installment ที่ครอบคลุมช่วงเวลานั้น
-      // period_start <= LastDayOfMonth AND period_end >= FirstDayOfMonth
       if (month && year) {
-        // หาวันแรกและวันสุดท้ายของเดือนที่เลือก
-        // แต่ใน DB เก็บเป็น period_start, period_end (DATE)
-        // Logic: Installment ครอบคลุมเดือน M ปี Y ถ้า:
-        //  - period_start <= Y-M-[EndDay]
-        //  - period_end >= Y-M-01
         
-        // สร้าง string วันที่ YYYY-MM-DD สำหรับ query
         const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
-        // หาวันสุดท้าย: ใช้ JS Date
-        const lastDateObj = new Date(year, month, 0); // month is 1-based, so Date(y, m, 0) gives last day of prev month? No, Date(y, m, 0) gives last day of month 'm' if m is 1-based?? 
-        // Wait, new Date(2026, 1, 1) is Feb 1st. new Date(2026, 2, 0) is Last day of Feb.
-        // req.query.month 1-12. 
-        // new Date(year, month, 0) -> gives last day of `month`. e.g. month=1 (Jan), new Date(2026, 1, 0) = Jan 31. Correct.
+        const lastDateObj = new Date(year, month, 0);
         const lastDayVal = lastDateObj.getDate();
         const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayVal).padStart(2, '0')}`;
 
@@ -648,10 +611,6 @@ function registerPromptPayRoutes(app) {
 
       const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-      // ใช้ ROW_NUMBER() เพื่อเลือก "1 รายการ" ต่อ 1 บ้าน
-      // กรณีระบุเดือน/ปี: เราหวังผลให้ได้งวดที่ตรงกับเดือนนั้นที่สุด (ซึ่งตาม Logic ควรมีแค่งวดเดียวที่ cover)
-      // กรณีไม่ระบุ: เอาตัวล่าสุด (ตาม due_date/id)
-      
       let sql = `
         WITH active_houses AS (
           SELECT DISTINCT TRIM(house_number) AS house_number
@@ -694,7 +653,6 @@ function registerPromptPayRoutes(app) {
         ORDER BY house_number ASC
         LIMIT ?
       `;
-      // params already filled, just add limit
       params.push(limit);
 
       const [rows] = await pool.query(sql, params);
@@ -705,7 +663,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // Fallback query for environments without window functions
   app.get('/payment-installments/latest/fallback', async (req, res) => {
     try {
       const search = String(req.query.search || '').trim();
@@ -742,7 +699,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // สร้าง intent เมื่อผู้ใช้กดงวด
   app.post('/payment-intents', async (req, res) => {
     try {
       const { installment_id, method = 'promptpay' } = req.body || {};
@@ -751,7 +707,6 @@ function registerPromptPayRoutes(app) {
         return res.status(400).json({ ok: false, message: 'invalid installment_id' });
       }
 
-      // Trust server-side installment data to avoid inconsistent/null payment_intents rows.
       const [instRows] = await pool.query(
         `SELECT id, payment_id, house_number, amount
            FROM payment_installments
@@ -787,7 +742,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // GET: สร้าง/ดึง QR โดยอิงจากตาราง payment_installments ตาม installment_id
   app.get('/promptpay-qr/installment/:installmentId', async (req, res) => {
     try {
       const promptpayId = await getRuntimePromptPayId(app);
@@ -800,7 +754,6 @@ function registerPromptPayRoutes(app) {
       const forceRefresh = String(req.query.refresh || '0') === '1';
       const intentId = req.query.intentId ? Number(req.query.intentId) : null;
 
-      // ดึงข้อมูลงวดจากตารางโดยตรง
       const [rows] = await pool.query(
         `SELECT id, payment_id, house_number, amount, status, due_date
          FROM payment_installments WHERE id = ? LIMIT 1`,
@@ -815,12 +768,10 @@ function registerPromptPayRoutes(app) {
         return res.status(400).json({ ok: false, message: 'amount ของงวดนี้ไม่ถูกต้อง' });
       }
 
-      // แยก cache ต่อ installment และจำนวน
       const key = `ins:${installmentId}:${amount}`;
       const cached = await getActiveCachedQR(key);
 
       if (!forceRefresh && cached && Number(cached.amount) === amount) {
-        // ผูก intent กับ QR ที่ cache ไว้ (ถ้าส่งมา)
         if (intentId) await attachIntentToQR(intentId, cached);
         return res.json(
           respondQr(req, cached, {
@@ -839,7 +790,6 @@ function registerPromptPayRoutes(app) {
         await removeCachedQR(key);
       }
 
-      // สร้าง payload และ cache
       const payload = generatePayload(promptpayId, { amount });
       const record = await createAndCacheQR(key, {
         amount,
@@ -847,7 +797,6 @@ function registerPromptPayRoutes(app) {
         payload,
       });
 
-      // อัปเดต intent ด้วยข้อมูลไฟล์/ID ของ QR ที่เพิ่งสร้าง (ถ้าให้มา)
       if (intentId) await attachIntentToQR(intentId, record);
 
       return res.json(
@@ -867,8 +816,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // ...existing routes remain...
-  // GET /payment-installments/logs
   app.get('/payment-installments/logs', authGuard, async (req, res) => {
     try {
       const search = String(req.query.search || '').trim();
@@ -877,9 +824,6 @@ function registerPromptPayRoutes(app) {
       const conditions = [];
       const params = [];
 
-      // Filter: Show only relevant logs (paid, waiting, or has proof)
-      // If you want ALL history including pending, remove this condition or make it optional.
-      // Usually "logs" implies something happened.
       conditions.push(`(pi.status IN ('paid', 'waiting_approval') OR pi.proof_image IS NOT NULL OR pi.paid_at IS NOT NULL)`);
 
       if (search) {
@@ -914,7 +858,6 @@ function registerPromptPayRoutes(app) {
     }
   });
 
-  // GET /payment-installments/waiting-approval
   app.get('/payment-installments/waiting-approval', authGuard, async (req, res) => {
     try {
       const [rows] = await pool.query(
